@@ -1,7 +1,7 @@
 --[[
     유니버스 (Universe) - 얼티메이트 에디션
     - 섬세한 플레이어 텔레포트
-    - 보안 탭 + Anti-Grab 기능
+    - 보안 탭 + Anti-Grab 기능 추가 완료
     - 에임 TP 이펙트 제거
 ]]
 
@@ -1024,7 +1024,7 @@ MiscTab:CreateToggle({
 })
 
 --============================================================================--
--- 보안 탭 (Anti-Grab 포함)
+-- 🔥 보안 탭 (Anti-Grab 포함 - 요청하신 기능)
 --============================================================================--
 local SecurityTab = Window:CreateTab("보안", 4483362458)
 local SecuritySection = SecurityTab:CreateSection("🔒 계정 보안")
@@ -1054,7 +1054,7 @@ end
 local FriendCountLabel = SecurityTab:CreateLabel("친구 수: " .. GetFriendCount())
 
 --============================================================================--
--- 보안 설정 섹션 (Anti-Grab 포함)
+-- ⚙️ 보안 설정 섹션 (Anti-Afk)
 --============================================================================--
 local SecuritySettingsSection = SecurityTab:CreateSection("⚙️ 보안 설정")
 
@@ -1094,78 +1094,64 @@ SecurityTab:CreateToggle({
 })
 
 --============================================================================--
--- 🔥 Anti-Grab (잡기 방지) - 요청하신 기능
+-- 🛡️ Anti-Grab (잡기 방지) - 요청하신 기능 추가!
 --============================================================================--
 local AntiGrabSection = SecurityTab:CreateSection("🛡️ Anti-Grab (잡기 방지)")
-
--- ReplicatedStorage에서 필요한 원격 이벤트 가져오기
-local rs = ReplicatedStorage
-local plr = LocalPlayer
 
 -- Anti-Grab 변수
 local AntiGrabEnabled = false
 local AntiGrabConnection = nil
-local Inventory = nil
+local StruggleRemote = nil
+local RagdollRemote = nil
 
--- 인벤토리 찾기 함수 (플레이어 이름 기반)
-local function FindInventory()
-    -- "플레이어이름SpawnedInToys" 패턴으로 찾기
-    local inventoryName = plr.Name .. "SpawnedInToys"
-    return workspace:WaitForChild(inventoryName, 5)
-end
-
--- Struggle과 Ragdoll 원격 이벤트 찾기
-local Struggle = rs:FindFirstChild("CharacterEvents") and rs.CharacterEvents:FindFirstChild("Struggle")
-local Ragdoll = rs:FindFirstChild("CharacterEvents") and rs.CharacterEvents:FindFirstChild("RagdollRemote")
-
--- Anti-Grab 함수
-local function StartAntiGrab()
-    -- 필요한 것들이 모두 있는지 확인
-    if not Struggle or not Ragdoll then
-        Rayfield:Notify({
-            Title = "⚠️ Anti-Grab 오류",
-            Content = "Struggle 또는 Ragdoll 원격을 찾을 수 없음",
-            Duration = 3
-        })
-        return false
-    end
+-- Anti-Grab 초기화 함수
+local function InitializeAntiGrab()
+    -- ReplicatedStorage에서 필요한 원격 이벤트 찾기
+    local rs = ReplicatedStorage
+    local characterEvents = rs:FindFirstChild("CharacterEvents")
     
-    -- 인벤토리 찾기
-    Inventory = FindInventory()
-    if not Inventory then
-        Rayfield:Notify({
-            Title = "⚠️ Anti-Grab 오류",
-            Content = "인벤토리를 찾을 수 없음",
-            Duration = 3
-        })
-        return false
+    if characterEvents then
+        StruggleRemote = characterEvents:FindFirstChild("Struggle")
+        RagdollRemote = characterEvents:FindFirstChild("RagdollRemote")
     end
     
     -- IsHeld 속성 확인
-    if not plr:FindFirstChild("IsHeld") then
-        Rayfield:Notify({
-            Title = "⚠️ Anti-Grab 오류",
-            Content = "IsHeld 속성을 찾을 수 없음",
-            Duration = 3
-        })
-        return false
+    if not LocalPlayer:FindFirstChild("IsHeld") then
+        return false, "IsHeld 속성을 찾을 수 없음"
     end
     
+    if not StruggleRemote or not RagdollRemote then
+        return false, "Struggle 또는 Ragdoll 원격을 찾을 수 없음"
+    end
+    
+    return true, "초기화 성공"
+end
+
+-- Anti-Grab 실행 함수
+local function StartAntiGrab()
     -- Anti-Grab 루프 시작
     AntiGrabConnection = RunService.Heartbeat:Connect(function()
         if not AntiGrabEnabled then return end
         
         SafeCall(function()
-            local char = plr.Character
-            if not char then return end
-            
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            local hum = char:FindFirstChild("Humanoid")
-            
-            if plr.IsHeld.Value and hrp and hum then
-                Struggle:FireServer()
-                Ragdoll:FireServer(hrp, 0)
-                hum.Sit = false
+            -- 플레이어가 잡혔는지 확인
+            if LocalPlayer.IsHeld and LocalPlayer.IsHeld.Value == true then
+                local char = LocalPlayer.Character
+                if char then
+                    local hrp = char:FindFirstChild("HumanoidRootPart")
+                    local hum = char:FindFirstChild("Humanoid")
+                    
+                    if hrp and hum and StruggleRemote and RagdollRemote then
+                        -- Struggle 발동
+                        StruggleRemote:FireServer()
+                        
+                        -- Ragdoll 발동
+                        RagdollRemote:FireServer(hrp, 0)
+                        
+                        -- Sit 해제
+                        hum.Sit = false
+                    end
+                end
             end
         end)
     end)
@@ -1173,7 +1159,10 @@ local function StartAntiGrab()
     return true
 end
 
--- Anti-Grab 토글
+-- Anti-Grab 초기화 상태 확인
+local initSuccess, initMessage = InitializeAntiGrab()
+
+-- Anti-Grab 토글 생성
 SecurityTab:CreateToggle({
     Name = "🛡️ Anti-Grab (잡기 방지)",
     CurrentValue = false,
@@ -1182,16 +1171,32 @@ SecurityTab:CreateToggle({
         AntiGrabEnabled = state
         
         if AntiGrabEnabled then
-            -- Anti-Grab 시작
-            local success = StartAntiGrab()
+            -- 초기화 재확인
+            local success, message = InitializeAntiGrab()
+            
             if success then
-                Rayfield:Notify({
-                    Title = "✅ Anti-Grab",
-                    Content = "활성화됨 - 잡히면 자동으로 풀림",
-                    Duration = 3
-                })
+                local startSuccess = StartAntiGrab()
+                if startSuccess then
+                    Rayfield:Notify({
+                        Title = "✅ Anti-Grab 활성화",
+                        Content = "잡히면 자동으로 풀립니다",
+                        Duration = 3
+                    })
+                else
+                    AntiGrabEnabled = false
+                    Rayfield:Notify({
+                        Title = "❌ Anti-Grab 실패",
+                        Content = "시작 실패",
+                        Duration = 3
+                    })
+                end
             else
                 AntiGrabEnabled = false
+                Rayfield:Notify({
+                    Title = "❌ Anti-Grab 실패",
+                    Content = message or "알 수 없는 오류",
+                    Duration = 3
+                })
             end
         else
             -- Anti-Grab 중지
@@ -1199,30 +1204,60 @@ SecurityTab:CreateToggle({
                 AntiGrabConnection:Disconnect()
                 AntiGrabConnection = nil
             end
-            Rayfield:Notify({ Title = "Anti-Grab", Content = "비활성화됨", Duration = 2 })
+            Rayfield:Notify({
+                Title = "Anti-Grab",
+                Content = "비활성화됨",
+                Duration = 2
+            })
         end
     end,
 })
 
--- Anti-Grab 상태 표시
+-- Anti-Grab 상태 표시 레이블
 local AntiGrabStatusLabel = SecurityTab:CreateLabel("Anti-Grab 상태: 꺼짐")
 local AntiGrabInfoLabel = SecurityTab:CreateLabel("정보: 잡히면 자동으로 Struggle 발동")
 
+-- 상태 업데이트
 RunService.Heartbeat:Connect(function()
-    AntiGrabStatusLabel:Set("Anti-Grab 상태: " .. (AntiGrabEnabled and "켜짐 ✅" or "꺼짐 ❌"))
-    
-    -- IsHeld 상태 표시 (디버깅용)
-    if AntiGrabEnabled and plr:FindFirstChild("IsHeld") then
-        if plr.IsHeld.Value then
+    if AntiGrabEnabled then
+        AntiGrabStatusLabel:Set("Anti-Grab 상태: 켜짐 ✅")
+        
+        -- 현재 잡힘 상태 표시
+        if LocalPlayer:FindFirstChild("IsHeld") and LocalPlayer.IsHeld.Value then
             AntiGrabInfoLabel:Set("⚠️ 현재 잡혀있음! - 자동으로 풀는 중...")
         else
             AntiGrabInfoLabel:Set("✅ 안전함 - 잡히지 않은 상태")
         end
+    else
+        AntiGrabStatusLabel:Set("Anti-Grab 상태: 꺼짐 ❌")
+        AntiGrabInfoLabel:Set("정보: 잡히면 자동으로 Struggle 발동")
     end
 end)
 
+-- Anti-Grab 원격 존재 여부 표시
+local function GetRemoteStatus()
+    local rs = ReplicatedStorage
+    local characterEvents = rs:FindFirstChild("CharacterEvents")
+    
+    if not characterEvents then
+        return "❌ CharacterEvents 없음"
+    end
+    
+    local struggle = characterEvents:FindFirstChild("Struggle") and "✅" or "❌"
+    local ragdoll = characterEvents:FindFirstChild("RagdollRemote") and "✅" or "❌"
+    
+    return string.format("Struggle: %s | Ragdoll: %s", struggle, ragdoll)
+end
+
+local RemoteStatusLabel = SecurityTab:CreateLabel("원격 상태: " .. GetRemoteStatus())
+
+-- 주기적으로 원격 상태 업데이트
+RunService.Heartbeat:Connect(function()
+    RemoteStatusLabel:Set("원격 상태: " .. GetRemoteStatus())
+end)
+
 --============================================================================--
--- 세션 정보 섹션
+-- 📊 세션 정보 섹션
 --============================================================================--
 local SessionSection = SecurityTab:CreateSection("📊 세션 정보")
 
@@ -1257,7 +1292,7 @@ Players.PlayerRemoving:Connect(function()
 end)
 
 --============================================================================--
--- 위험 경고 섹션
+-- ⚠️ 위험 경고 섹션
 --============================================================================--
 local WarningSection = SecurityTab:CreateSection("⚠️ 위험 경고")
 
