@@ -1,6 +1,8 @@
 --[[
-    유니버스 (Universe) - Rayfield GUI (PCLD 빨간점 표시 + 선택형 텔레포트)
-    탭 구성: 메인 (PCLD 빨간점) | 텔레포트 (플레이어 선택) | 그 외
+    유니버스 (Universe) - Rayfield GUI (최종 업그레이드 버전)
+    - PCLD: 상대방 위치에 ID 표시
+    - 속도 조절: 더 섬세하고 안정적으로
+    - 플레이어 텔레포트: 1초 딜레이 + 시각적 효과
 ]]
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -26,6 +28,8 @@ local player = game.Players.LocalPlayer
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 --============================================================================--
 -- 1. 메인 탭 (핵심 기능)
@@ -41,46 +45,112 @@ Rayfield:Notify({
 })
 
 ------------------------------------------------------------------------
--- 1.1 속도 조절 슬라이더
+-- 1.1 속도 조절 슬라이더 (더 섬세하게 개선)
 ------------------------------------------------------------------------
 local currentSpeed = 16
+local speedHumanoid = nil
+local speedConnection = nil
 
+-- 속도 적용 함수 (안전하게)
+local function applySpeed(speedValue)
+    if player.Character then
+        local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = speedValue
+            return true
+        end
+    end
+    return false
+end
+
+-- 속도 슬라이더 생성 (더 세분화된 조절)
 MainTab:CreateSlider({
-    Name = "속도 조절 (WalkSpeed)",
+    Name = "속도 조절 (WalkSpeed) - 0.1 단위 조절",
     Range = {16, 500},
-    Increment = 1,
+    Increment = 0.1,  -- 0.1 단위로 더 섬세하게 조절
     Suffix = "Speed",
     CurrentValue = 16,
     Flag = "SpeedSlider",
     Callback = function(value)
         currentSpeed = value
-        if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
-            player.Character.Humanoid.WalkSpeed = value
-        end
+        applySpeed(value)
     end,
 })
 
-player.CharacterAdded:Connect(function(character)
-    repeat wait() until character:FindFirstChildOfClass("Humanoid")
-    character.Humanoid.WalkSpeed = currentSpeed
+-- 현재 속도 표시 레이블
+local speedLabel = MainTab:CreateLabel("현재 속도: 16.0")
+
+-- 속도 실시간 표시 업데이트
+game:GetService("RunService").Heartbeat:Connect(function()
+    if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+        local currentWS = player.Character.Humanoid.WalkSpeed
+        speedLabel:Set("현재 속도: " .. string.format("%.1f", currentWS))
+    end
 end)
 
+-- 캐릭터 리스폰 처리 (더 안정적으로)
+local function onCharacterAdded(character)
+    -- 캐릭터가 완전히 로드될 때까지 기다림
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    if humanoid then
+        -- 약간의 지연 후 속도 적용 (게임이 덮어쓰는 것 방지)
+        task.wait(0.5)
+        humanoid.WalkSpeed = currentSpeed
+        
+        -- 지속적으로 속도 감시 (게임이 강제로 변경할 경우 대비)
+        if speedConnection then
+            speedConnection:Disconnect()
+        end
+        
+        speedConnection = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+            if humanoid.WalkSpeed ~= currentSpeed and currentSpeed > 16 then
+                -- 게임이 속도를 변경하려고 하면 다시 우리 속도로 되돌림
+                task.wait(0.1)
+                if humanoid.WalkSpeed ~= currentSpeed then
+                    humanoid.WalkSpeed = currentSpeed
+                end
+            end
+        end)
+    end
+end
+
+-- 캐릭터 추가 이벤트 연결
+player.CharacterAdded:Connect(onCharacterAdded)
+
+-- 초기 캐릭터 처리
+if player.Character then
+    onCharacterAdded(player.Character)
+end
+
 ------------------------------------------------------------------------
--- 1.2 점프력 조절
+-- 1.2 점프력 조절 (더 섬세하게)
 ------------------------------------------------------------------------
+local currentJumpPower = 50
+
 MainTab:CreateSlider({
-    Name = "점프력 조절 (JumpPower)",
+    Name = "점프력 조절 (JumpPower) - 0.5 단위 조절",
     Range = {50, 300},
-    Increment = 1,
+    Increment = 0.5,
     Suffix = "Power",
     CurrentValue = 50,
     Flag = "JumpSlider",
     Callback = function(value)
+        currentJumpPower = value
         if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
             player.Character.Humanoid.JumpPower = value
         end
     end,
 })
+
+-- 점프력 실시간 표시
+local jumpLabel = MainTab:CreateLabel("현재 점프력: 50.0")
+
+RunService.Heartbeat:Connect(function()
+    if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+        local currentJP = player.Character.Humanoid.JumpPower
+        jumpLabel:Set("현재 점프력: " .. string.format("%.1f", currentJP))
+    end
+end)
 
 ------------------------------------------------------------------------
 -- 1.3 무한 점프
@@ -154,75 +224,77 @@ MainTab:CreateToggle({
     end,
 })
 
-player.CharacterAdded:Connect(function(character)
-    if NoclipEnabled then
-        repeat wait() until character:FindFirstChildOfClass("Humanoid")
-        wait(0.5)
-        
-        for _, part in pairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-    end
-end)
-
 ------------------------------------------------------------------------
--- 1.5 PCLD - 상대방 위치 빨간점 표시
+-- 1.5 PCLD - 상대방 위치 ID 표시 (빨간점 대신 ID로)
 ------------------------------------------------------------------------
-local PCLDSection = MainTab:CreateSection("PCLD - 상대방 위치 표시")
+local PCLDSection = MainTab:CreateSection("PCLD - 상대방 ID 표시")
 
 local PCLDEnabled = false
-local PCLDMarkers = {}  -- 빨간점 마커 저장 테이블
+local PCLDMarkers = {}  -- ID 마커 저장 테이블
 local PCLDConnection = nil
 
--- 빨간점 마커 생성 함수
-local function createRedMarker(targetPlayer)
+-- ID 마커 생성 함수 (빨간점 대신 ID 텍스트)
+local function createIDMarker(targetPlayer)
     if not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
         return nil
     end
     
-    -- 빨간점 표시를 위한 Part 생성
+    -- 마커를 위한 Part (거의 투명하게)
     local marker = Instance.new("Part")
     marker.Name = "PCLD_Marker_" .. targetPlayer.Name
-    marker.Size = Vector3.new(2, 2, 2)  -- 2x2x2 크기의 정육면체
-    marker.BrickColor = BrickColor.new("Really red")  -- 빨간색
-    marker.Material = Enum.Material.Neon  -- 네온 재질로 더 눈에 띄게
-    marker.Shape = Enum.PartType.Ball  -- 공 모양 (동그랗게)
+    marker.Size = Vector3.new(1, 1, 1)
+    marker.Transparency = 1  -- 완전 투명
     marker.Anchored = true
     marker.CanCollide = false
     marker.Parent = workspace
     
-    -- 빛 효과 추가 (더 잘 보이게)
-    local pointLight = Instance.new("PointLight")
-    pointLight.Color = Color3.fromRGB(255, 0, 0)
-    pointLight.Range = 10
-    pointLight.Brightness = 2
-    pointLight.Parent = marker
-    
-    -- 빛나는 효과를 위한 BillboardGui
+    -- ID 표시를 위한 BillboardGui
     local billboard = Instance.new("BillboardGui")
-    billboard.Name = "NameTag"
-    billboard.Size = UDim2.new(0, 100, 0, 30)
+    billboard.Name = "IDTag"
+    billboard.Size = UDim2.new(0, 150, 0, 50)
     billboard.StudsOffset = Vector3.new(0, 3, 0)
     billboard.AlwaysOnTop = true
     billboard.Parent = marker
     
+    -- 배경
+    local background = Instance.new("Frame")
+    background.Size = UDim2.new(1, 0, 1, 0)
+    background.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    background.BackgroundTransparency = 0.3
+    background.BorderSizePixel = 2
+    background.BorderColor3 = Color3.fromRGB(255, 100, 100)
+    background.Parent = billboard
+    
+    -- ID 표시 텍스트
+    local idLabel = Instance.new("TextLabel")
+    idLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    idLabel.Position = UDim2.new(0, 0, 0, 0)
+    idLabel.BackgroundTransparency = 1
+    idLabel.Text = "ID: " .. targetPlayer.UserId
+    idLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
+    idLabel.TextStrokeTransparency = 0.3
+    idLabel.TextStrokeColor3 = Color3.fromRGB(255, 0, 0)
+    idLabel.Font = Enum.Font.GothamBold
+    idLabel.TextSize = 18
+    idLabel.Parent = background
+    
+    -- 이름 표시 텍스트 (작게)
     local nameLabel = Instance.new("TextLabel")
-    nameLabel.Size = UDim2.new(1, 0, 1, 0)
+    nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    nameLabel.Position = UDim2.new(0, 0, 0.5, 0)
     nameLabel.BackgroundTransparency = 1
     nameLabel.Text = targetPlayer.Name
     nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    nameLabel.TextStrokeTransparency = 0  -- 테두리
+    nameLabel.TextStrokeTransparency = 0
     nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-    nameLabel.Font = Enum.Font.GothamBold
-    nameLabel.TextSize = 16
-    nameLabel.Parent = billboard
+    nameLabel.Font = Enum.Font.Gotham
+    nameLabel.TextSize = 14
+    nameLabel.Parent = background
     
     return marker
 end
 
--- 모든 플레이어의 위치에 빨간점 업데이트
+-- 모든 플레이어의 위치에 ID 마커 생성
 local function updatePCLDMarkers()
     -- 기존 마커 제거
     for _, marker in pairs(PCLDMarkers) do
@@ -235,7 +307,7 @@ local function updatePCLDMarkers()
     -- 모든 플레이어 순회 (자신 제외)
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            local marker = createRedMarker(plr)
+            local marker = createIDMarker(plr)
             if marker then
                 PCLDMarkers[plr] = marker
             end
@@ -243,7 +315,7 @@ local function updatePCLDMarkers()
     end
 end
 
--- 마커 위치 업데이트 (연결용)
+-- 마커 위치 업데이트
 local function moveMarkersToPlayers()
     for plr, marker in pairs(PCLDMarkers) do
         if plr and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
@@ -260,7 +332,7 @@ local function moveMarkersToPlayers()
     -- 새로 추가된 플레이어 확인
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= player and not PCLDMarkers[plr] and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            local marker = createRedMarker(plr)
+            local marker = createIDMarker(plr)
             if marker then
                 PCLDMarkers[plr] = marker
             end
@@ -270,7 +342,7 @@ end
 
 -- PCLD 토글 생성
 MainTab:CreateToggle({
-    Name = "PCLD - 상대방 위치 빨간점 표시",
+    Name = "PCLD - 상대방 ID 표시",
     CurrentValue = false,
     Flag = "PCLDToggle",
     Callback = function(state)
@@ -287,7 +359,7 @@ MainTab:CreateToggle({
                 end
             end)
             
-            Rayfield:Notify({ Title = "PCLD", Content = "상대방 위치에 빨간점 표시 ON", Duration = 2 })
+            Rayfield:Notify({ Title = "PCLD", Content = "상대방 ID 표시 ON", Duration = 2 })
         else
             -- PCLD 비활성화
             if PCLDConnection then
@@ -303,7 +375,7 @@ MainTab:CreateToggle({
             end
             PCLDMarkers = {}
             
-            Rayfield:Notify({ Title = "PCLD", Content = "상대방 위치 표시 OFF", Duration = 2 })
+            Rayfield:Notify({ Title = "PCLD", Content = "상대방 ID 표시 OFF", Duration = 2 })
         end
     end,
 })
@@ -311,7 +383,7 @@ MainTab:CreateToggle({
 -- 플레이어 추가/제거 이벤트 처리
 Players.PlayerAdded:Connect(function(newPlayer)
     if PCLDEnabled and newPlayer ~= player then
-        -- 새 플레이어가 추가되면 다음 업데이트 주기에 자동 생성됨
+        -- 다음 업데이트 주기에 자동 생성됨
     end
 end)
 
@@ -323,14 +395,15 @@ Players.PlayerRemoving:Connect(function(leavingPlayer)
 end)
 
 --============================================================================--
--- 2. 텔레포트 탭 (플레이어 선택형 텔레포트)
+-- 2. 텔레포트 탭 (1초 딜레이 텔레포트)
 --============================================================================--
 local TeleportTab = Window:CreateTab("텔레포트", 4483362458)
-local TeleportSection = TeleportTab:CreateSection("플레이어에게 텔레포트")
+local TeleportSection = TeleportTab:CreateSection("플레이어에게 텔레포트 (1초 딜레이)")
 
 -- 플레이어 선택 드롭다운을 위한 변수
 local selectedPlayer = nil
 local playerList = {}
+local isTeleporting = false
 
 -- 플레이어 목록 업데이트 함수
 local function updatePlayerList()
@@ -343,10 +416,13 @@ local function updatePlayerList()
     return playerList
 end
 
+-- 초기 플레이어 목록
+local initialList = updatePlayerList()
+
 -- 플레이어 선택 드롭다운
 local playerDropdown = TeleportTab:CreateDropdown({
     Name = "플레이어 선택",
-    Options = updatePlayerList(),
+    Options = initialList,
     CurrentOption = "",
     MultipleOptions = false,
     Flag = "PlayerSelectDropdown",
@@ -355,63 +431,197 @@ local playerDropdown = TeleportTab:CreateDropdown({
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr.Name == option then
                 selectedPlayer = plr
+                Rayfield:Notify({
+                    Title = "플레이어 선택",
+                    Content = plr.Name .. "님이 선택됨",
+                    Duration = 1.5
+                })
                 break
             end
         end
     end,
 })
 
+-- 상태 표시 레이블
+local statusLabel = TeleportTab:CreateLabel("상태: 대기 중")
+
+-- 텔레포트 함수 (1초 딜레이 + 효과)
+local function teleportToPlayer(targetPlayer)
+    if isTeleporting then
+        Rayfield:Notify({
+            Title = "경고",
+            Content = "이미 텔레포트 중입니다!",
+            Duration = 2
+        })
+        return
+    end
+    
+    if not targetPlayer then
+        Rayfield:Notify({
+            Title = "오류",
+            Content = "먼저 플레이어를 선택하세요!",
+            Duration = 2
+        })
+        return
+    end
+    
+    if not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        Rayfield:Notify({
+            Title = "오류",
+            Content = targetPlayer.Name .. "님의 캐릭터를 찾을 수 없습니다.",
+            Duration = 2
+        })
+        return
+    end
+    
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+        Rayfield:Notify({
+            Title = "오류",
+            Content = "내 캐릭터가 없습니다.",
+            Duration = 2
+        })
+        return
+    end
+    
+    -- 텔레포트 시작
+    isTeleporting = true
+    
+    -- 1초 카운트다운 및 효과
+    for i = 1, 10 do
+        local countdownValue = (11 - i) / 10
+        statusLabel:Set("상태: " .. string.format("%.1f", countdownValue) .. "초 후 텔레포트...")
+        
+        -- 화면 흔들림 효과 (점점 강하게)
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local randomOffset = Vector3.new(
+                math.random(-10, 10) / 10 * (1 - countdownValue),
+                math.random(-10, 10) / 10 * (1 - countdownValue),
+                math.random(-10, 10) / 10 * (1 - countdownValue)
+            )
+            player.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame + randomOffset
+        end
+        
+        -- 효과음 (선택사항, 게임에 따라 다름)
+        -- 게임에 따라 사운드 서비스 사용 가능
+        
+        task.wait(0.1)  -- 0.1초씩 10번 = 총 1초
+    end
+    
+    -- 텔레포트 실행
+    if targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local targetCF = targetPlayer.Character.HumanoidRootPart.CFrame
+        player.Character.HumanoidRootPart.CFrame = targetCF + Vector3.new(0, 5, 0)
+        
+        -- 텔레포트 완료 효과 (빛나는 효과)
+        local effectPart = Instance.new("Part")
+        effectPart.Size = Vector3.new(5, 5, 5)
+        effectPart.Position = player.Character.HumanoidRootPart.Position
+        effectPart.BrickColor = BrickColor.new("Bright blue")
+        effectPart.Material = Enum.Material.Neon
+        effectPart.Transparency = 0.5
+        effectPart.Anchored = true
+        effectPart.CanCollide = false
+        effectPart.Parent = workspace
+        
+        -- 서서히 사라지는 효과
+        for i = 1, 10 do
+            effectPart.Transparency = effectPart.Transparency + 0.05
+            effectPart.Size = effectPart.Size + Vector3.new(0.5, 0.5, 0.5)
+            task.wait(0.05)
+        end
+        
+        effectPart:Destroy()
+        
+        Rayfield:Notify({
+            Title = "텔레포트 완료!",
+            Content = targetPlayer.Name .. "님에게 이동했습니다.",
+            Duration = 3
+        })
+    else
+        Rayfield:Notify({
+            Title = "오류",
+            Content = "텔레포트 실패: 대상 캐릭터가 사라졌습니다.",
+            Duration = 2
+        })
+    end
+    
+    statusLabel:Set("상태: 대기 중")
+    isTeleporting = false
+end
+
 -- 선택된 플레이어에게 텔레포트 버튼
 TeleportTab:CreateButton({
-    Name = "선택한 플레이어에게 텔레포트",
+    Name = "🎯 선택한 플레이어에게 텔레포트 (1초 후 이동)",
     Callback = function()
-        if selectedPlayer then
-            if selectedPlayer.Character and selectedPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    -- 선택된 플레이어 위치로 텔레포트 (약간 위쪽에)
-                    player.Character.HumanoidRootPart.CFrame = selectedPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 5, 0)
-                    Rayfield:Notify({
-                        Title = "텔레포트",
-                        Content = selectedPlayer.Name .. "님에게 이동했습니다.",
-                        Duration = 2
-                    })
-                else
-                    Rayfield:Notify({
-                        Title = "오류",
-                        Content = "내 캐릭터가 없습니다.",
-                        Duration = 2
-                    })
-                end
-            else
-                Rayfield:Notify({
-                    Title = "오류",
-                    Content = selectedPlayer.Name .. "님의 캐릭터를 찾을 수 없습니다.",
-                    Duration = 2
-                })
-            end
-        else
-            Rayfield:Notify({
-                Title = "오류",
-                Content = "먼저 플레이어를 선택하세요.",
-                Duration = 2
-            })
-        end
+        teleportToPlayer(selectedPlayer)
     end,
 })
 
+-- 빠른 텔레포트를 위한 키바인드 (선택사항)
+local keybindLabel = TeleportTab:CreateLabel("단축키: T 키를 눌러 선택된 플레이어에게 즉시 텔레포트")
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.T then
+        if selectedPlayer then
+            teleportToPlayer(selectedPlayer)
+        else
+            Rayfield:Notify({
+                Title = "알림",
+                Content = "먼저 플레이어를 선택하세요!",
+                Duration = 2
+            })
+        end
+    end
+end)
+
 -- 플레이어 목록 새로고침 버튼
 TeleportTab:CreateButton({
-    Name = "플레이어 목록 새로고침",
+    Name = "🔄 플레이어 목록 새로고침",
     Callback = function()
         local newOptions = updatePlayerList()
         playerDropdown:Set(newOptions)
+        
+        -- 선택 초기화 (선택된 플레이어가 목록에 없을 수 있음)
+        local stillExists = false
+        if selectedPlayer then
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr == selectedPlayer then
+                    stillExists = true
+                    break
+                end
+            end
+        end
+        
+        if not stillExists then
+            selectedPlayer = nil
+        end
+        
         Rayfield:Notify({
-            Title = "텔레포트",
-            Content = "플레이어 목록이 갱신되었습니다.",
+            Title = "갱신 완료",
+            Content = "플레이어 목록이 갱신되었습니다. 현재 " .. #newOptions .. "명의 플레이어",
             Duration = 2
         })
     end,
 })
+
+-- 현재 선택된 플레이어 정보 표시
+local selectedInfoLabel = TeleportTab:CreateLabel("선택된 플레이어: 없음")
+
+-- 선택 정보 실시간 업데이트
+game:GetService("RunService").Heartbeat:Connect(function()
+    if selectedPlayer then
+        if selectedPlayer.Character and selectedPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local pos = selectedPlayer.Character.HumanoidRootPart.Position
+            selectedInfoLabel:Set("선택됨: " .. selectedPlayer.Name .. " (거리: " .. 
+                string.format("%.1f", (player.Character and player.Character:FindFirstChild("HumanoidRootPart") and 
+                (player.Character.HumanoidRootPart.Position - pos).Magnitude or 0)) .. ")")
+        else
+            selectedInfoLabel:Set("선택됨: " .. selectedPlayer.Name .. " (캐릭터 없음)")
+        end
+    else
+        selectedInfoLabel:Set("선택된 플레이어: 없음")
+    end
+end)
 
 --============================================================================--
 -- 2.2 일반 텔레포트 기능 (기존 유지)
