@@ -1,111 +1,423 @@
+-- Rayfield UI 로드
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- [ 원본 파일 변수 및 리모트 설정 ]
-local Players = game:GetService("Players")
-local plr = Players.LocalPlayer
-local rs = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local SetNetworkOwner = rs:WaitForChild("GrabEvents"):WaitForChild("SetNetworkOwner")
-
--- 보이드 높이 (파일 로직)
-local FallenY = workspace.FallenPartsDestroyHeight
-local targetY = (FallenY <= -50000 and -49999) or (FallenY <= -100 and -99) or -100
-
+-- 창 생성
 local Window = Rayfield:CreateWindow({
-   Name = "FTAP 타겟 루프 스크립트",
-   LoadingTitle = "파일 로직 이식 완료",
-   LoadingSubtitle = "자동 대상 인식 모드",
-   ConfigurationSaving = { Enabled = false }
+    Name = "🔒 Anti-Grab Ultimate",
+    LoadingTitle = "안티 그랩 + 플링 + 반짝이",
+    LoadingSubtitle = "종합 핵 모음",
+    ConfigurationSaving = { Enabled = false },
+    KeySystem = false,
+    ToggleUIKeybind = "K"
 })
 
-local MainTab = Window:CreateTab("그랩 설정", 4483362458)
+-- 탭 생성
+local AntiGrabTab = Window:CreateTab("안티 그랩", "shield")
+local ShinyTab = Window:CreateTab("반짝이 탐지", "star")
+local FlingTab = Window:CreateTab("플링", "hammer")
 
--- [ 변수 설정 ]
-local AutoLoopTarget = nil -- 현재 자동으로 잡힌 대상
-local IsAutoLoopEnabled = false
+-------------------------------------------------------------
+-- [1] 안티 그랩 (Anti-Grab) 코어 기능
+-------------------------------------------------------------
+local AntiGrabSection = AntiGrabTab:CreateSection("🛡️ 안티 그랩 설정")
 
--- [ 핵심 로직: 내가 누군가를 잡으면 그 대상을 루프 타겟으로 지정 ]
-task.spawn(function()
-    RunService.Heartbeat:Connect(function()
-        if not IsAutoLoopEnabled then return end
-        
-        -- 내가 누군가를 잡고 있는지 감지 (GrabParts 모델 확인)
-        local grabParts = workspace:FindFirstChild("GrabParts")
-        if grabParts then
-            for _, gp in pairs(grabParts:GetChildren()) do
-                -- 내가 생성한 그랩 파트인지 확인 (보통 본인의 그랩은 구분이 가능)
-                local weld = gp:FindFirstChildOfClass("WeldConstraint")
-                if weld and weld.Part1 and weld.Part1:IsDescendantOf(workspace) then
-                    local model = weld.Part1:FindFirstAncestorOfClass("Model")
-                    local targetPlr = Players:GetPlayerFromCharacter(model)
+local antiGrabEnabled = false
+local antiGrabMode = "텔레포트" -- "텔레포트", "넉백", "투명화"
+local antiGrabDistance = 10
+local lastGrabber = nil
+local grabAttempts = 0
+
+-- 안티 그랩 감지 시스템
+local function setupAntiGrab()
+    local lp = game.Players.LocalPlayer
+    if not lp.Character then return end
+    
+    local hrp = lp.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    -- 주변 플레이어 감지 (접근하는 사람)
+    spawn(function()
+        while antiGrabEnabled do
+            task.wait(0.1)
+            
+            if not lp.Character or not hrp then
+                hrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+                if not hrp then continue end
+            end
+            
+            local myPos = hrp.Position
+            
+            for _, player in ipairs(game.Players:GetPlayers()) do
+                if player ~= lp and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local theirHrp = player.Character.HumanoidRootPart
+                    local distance = (myPos - theirHrp.Position).Magnitude
                     
-                    if targetPlr and targetPlr ~= plr then
-                        -- [자동 타겟팅] 방금 내가 잡은 유저를 루프 대상으로 고정
-                        AutoLoopTarget = targetPlr
+                    -- 너무 가까이 오면 위협으로 간주
+                    if distance < antiGrabDistance then
+                        handleGrabAttempt(player, distance)
                     end
                 end
             end
         end
-
-        -- 타겟이 정해졌다면 무한 그랩 실행 (원본 SetNetworkOwner 로직)
-        if AutoLoopTarget and AutoLoopTarget.Character and AutoLoopTarget.Character:FindFirstChild("HumanoidRootPart") then
-            SetNetworkOwner:FireServer(AutoLoopTarget.Character.HumanoidRootPart)
+    end)
+    
+    -- 바인드 감지 (Constraint 감지 - 로프, 스프링 등)
+    spawn(function()
+        while antiGrabEnabled do
+            task.wait(0.5)
+            
+            if not lp.Character then continue end
+            
+            -- 몸에 연결된 Constraint 확인
+            for _, constraint in ipairs(lp.Character:GetDescendants()) do
+                if constraint:IsA("Constraint") then
+                    -- 다른 플레이어와 연결된 Constraint 감지
+                    local attachedToPlayer = false
+                    
+                    if constraint:IsA("RopeConstraint") or constraint:IsA("SpringConstraint") then
+                        local attachments = {constraint.Attachment0, constraint.Attachment1}
+                        
+                        for _, att in ipairs(attachments) do
+                            if att and att.Parent then
+                                local parentPart = att.Parent
+                                if parentPart.Parent and parentPart.Parent:IsA("Model") then
+                                    local character = parentPart.Parent
+                                    if character:FindFirstChild("Humanoid") then
+                                        local player = game.Players:GetPlayerFromCharacter(character)
+                                        if player and player ~= lp then
+                                            attachedToPlayer = true
+                                            lastGrabber = player
+                                            break
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    
+                    if attachedToPlayer then
+                        -- Constraint 제거
+                        constraint:Destroy()
+                        Rayfield:Notify({
+                            Title = "🚫 그랩 방지",
+                            Content = "잡기 시도 차단!",
+                            Duration = 2
+                        })
+                    end
+                end
+            end
         end
     end)
-end)
+end
 
--- [ UI 컴포넌트 ]
+-- 그랩 시도 처리
+local function handleGrabAttempt(player, distance)
+    if not antiGrabEnabled then return end
+    
+    local lp = game.Players.LocalPlayer
+    if not lp.Character then return end
+    
+    grabAttempts = grabAttempts + 1
+    lastGrabber = player
+    
+    -- 알림 (3번째 시도마다)
+    if grabAttempts % 3 == 0 then
+        Rayfield:Notify({
+            Title = "⚠️ 그랩 감지",
+            Content = player.Name .. "님이 접근 중!",
+            Duration = 2
+        })
+    end
+    
+    -- 모드별 대응
+    if antiGrabMode == "텔레포트" then
+        -- 안전한 위치로 텔레포트
+        local hrp = lp.Character.HumanoidRootPart
+        hrp.CFrame = hrp.CFrame + Vector3.new(0, 20, 20)
+        
+    elseif antiGrabMode == "넉백" then
+        -- 접근한 플레이어 밀쳐내기
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local theirHrp = player.Character.HumanoidRootPart
+            local direction = (theirHrp.Position - lp.Character.HumanoidRootPart.Position).Unit
+            theirHrp.Velocity = direction * 100 + Vector3.new(0, 50, 0)
+        end
+        
+    elseif antiGrabMode == "투명화" then
+        -- 투명화 및 충돌 비활성화
+        for _, part in ipairs(lp.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Transparency = 0.8
+                part.CanCollide = false
+            end
+        end
+        
+        -- 2초 후 복구
+        task.wait(2)
+        for _, part in ipairs(lp.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Transparency = 0
+                part.CanCollide = true
+            end
+        end
+    end
+end
 
-MainTab:CreateToggle({
-   Name = "잡은 사람 무한 유지 (Auto Loop Grab)",
-   CurrentValue = false,
-   Callback = function(Value)
-      IsAutoLoopEnabled = Value
-      if not Value then
-          AutoLoopTarget = nil -- 토글 끄면 대상 초기화
-      end
-   end,
+-- 안티 그랩 토글
+local AntiGrabToggle = AntiGrabTab:CreateToggle({
+    Name = "🛡️ 안티 그랩 활성화",
+    CurrentValue = false,
+    Callback = function(Value)
+        antiGrabEnabled = Value
+        if Value then
+            setupAntiGrab()
+            Rayfield:Notify({
+                Title = "✅ 안티 그랩 활성화",
+                Content = "접근하는 플레이어로부터 보호합니다",
+                Duration = 3
+            })
+        else
+            Rayfield:Notify({
+                Title = "⛔ 안티 그랩 비활성화",
+                Content = "보호 기능 꺼짐",
+                Duration = 2
+            })
+        end
+    end
 })
 
-MainTab:CreateButton({
-   Name = "현재 타겟 초기화",
-   Callback = function()
-      AutoLoopTarget = nil
-      Rayfield:Notify({Title = "알림", Content = "루프 대상을 초기화했습니다. 다시 잡으세요!"})
-   end,
+-- 안티 그랩 모드 선택
+local ModeDropdown = AntiGrabTab:CreateDropdown({
+    Name = "대응 모드",
+    Options = {"텔레포트", "넉백", "투명화"},
+    CurrentOption = {"텔레포트"},
+    Callback = function(Option)
+        antiGrabMode = Option[1]
+    end
 })
 
--- 킬 그랩 (원본 파일 로직 동일)
-local KillGrabEnabled = false
-MainTab:CreateToggle({
-   Name = "킬 그랩 (잡히면 즉시 처단)",
-   CurrentValue = false,
-   Callback = function(Value)
-      KillGrabEnabled = Value
-   end,
+-- 감지 거리 슬라이더
+local DistanceSlider = AntiGrabTab:CreateSlider({
+    Name = "감지 거리",
+    Range = {5, 30},
+    Increment = 1,
+    Suffix = "스터드",
+    CurrentValue = 10,
+    Callback = function(Value)
+        antiGrabDistance = Value
+    end
 })
 
-task.spawn(function()
-    while task.wait() do
-        if KillGrabEnabled then
-            local grabParts = workspace:FindFirstChild("GrabParts")
-            if grabParts then
-                for _, gp in pairs(grabParts:GetChildren()) do
-                    local weld = gp:FindFirstChildOfClass("WeldConstraint")
-                    if weld and weld.Part1 and weld.Part1:IsDescendantOf(workspace) then
-                        local attacker = weld.Part1:FindFirstAncestorOfClass("Model")
-                        if attacker and attacker ~= plr.Character then
-                            local root = attacker:FindFirstChild("HumanoidRootPart") or attacker:FindFirstChild("Torso")
-                            if root then
-                                root.CFrame = CFrame.new(root.Position.X, targetY, root.Position.Z)
-                                weld:Destroy()
+-- 강제 차단 버튼
+AntiGrabTab:CreateButton({
+    Name = "🚫 현재 잡힌 거 풀기",
+    Callback = function()
+        local lp = game.Players.LocalPlayer
+        if not lp.Character then return end
+        
+        -- 모든 Constraint 제거
+        for _, constraint in ipairs(lp.Character:GetDescendants()) do
+            if constraint:IsA("Constraint") or constraint:IsA("JointInstance") then
+                constraint:Destroy()
+            end
+        end
+        
+        -- Welds 제거
+        for _, weld in ipairs(lp.Character:GetDescendants()) do
+            if weld:IsA("Weld") or weld:IsA("Snap") or weld:IsA("Motor6D") then
+                if weld.Part0 and weld.Part1 then
+                    if weld.Part0.Parent ~= lp.Character or weld.Part1.Parent ~= lp.Character then
+                        weld:Destroy()
+                    end
+                end
+            end
+        end
+        
+        Rayfield:Notify({
+            Title = "✅ 구속 해제",
+            Content = "모든 그랩/잡기 해제됨",
+            Duration = 2
+        })
+    end
+})
+
+-------------------------------------------------------------
+-- [2] 반짝이는 물건 찾기 (Shiny Objects)
+-------------------------------------------------------------
+local ShinySection = ShinyTab:CreateSection("✨ 반짝이 탐지")
+
+local scanningShiny = false
+
+local function isShinyObject(obj)
+    if not obj:IsA("BasePart") then return false end
+    
+    -- Material 체크
+    local shinyMaterials = {
+        [Enum.Material.Neon] = true,
+        [Enum.Material.DiamondPlate] = true,
+        [Enum.Material.Foil] = true,
+        [Enum.Material.Glass] = true,
+        [Enum.Material.Glacier] = true
+    }
+    
+    if shinyMaterials[obj.Material] then return true end
+    
+    -- Reflectance 체크 (반사율)
+    if obj.Reflectance > 0.3 then return true end
+    
+    -- 빛 체크
+    if obj:FindFirstChildOfClass("PointLight") or 
+       obj:FindFirstChildOfClass("SurfaceLight") then
+        return true
+    end
+    
+    return false
+end
+
+local function scanForShiny()
+    local found = {}
+    
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if isShinyObject(obj) then
+            table.insert(found, obj)
+            
+            -- 하이라이트 표시
+            local highlight = Instance.new("Highlight")
+            highlight.Parent = obj
+            highlight.Adornee = obj
+            highlight.FillColor = Color3.fromRGB(255, 215, 0)
+            highlight.FillTransparency = 0.3
+            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+            
+            game:GetService("Debris"):AddItem(highlight, 5)
+        end
+    end
+    
+    return found
+end
+
+ShinyTab:CreateButton({
+    Name = "🔍 반짝이 스캔",
+    Callback = function()
+        local results = scanForShiny()
+        Rayfield:Notify({
+            Title = "스캔 완료",
+            Content = "발견된 반짝이: " .. #results .. "개",
+            Duration = 3
+        })
+    end
+})
+
+ShinyTab:CreateToggle({
+    Name = "🔄 자동 스캔",
+    CurrentValue = false,
+    Callback = function(Value)
+        scanningShiny = Value
+        
+        if Value then
+            spawn(function()
+                while scanningShiny do
+                    scanForShiny()
+                    task.wait(10)
+                end
+            end)
+        end
+    end
+})
+
+-------------------------------------------------------------
+-- [3] 사람 날리기 (Fling)
+-------------------------------------------------------------
+local FlingSection = FlingTab:CreateSection("👥 플링")
+
+local flingActive = false
+local flingTargets = {}
+local flingPower = 100
+
+local function getPlayers()
+    local list = {}
+    for _, p in ipairs(game.Players:GetPlayers()) do
+        if p ~= game.Players.LocalPlayer then
+            table.insert(list, p.Name)
+        end
+    end
+    return list
+end
+
+local TargetDropdown = FlingTab:CreateDropdown({
+    Name = "플링 대상",
+    Options = getPlayers(),
+    CurrentOption = {""},
+    MultipleOptions = true,
+    Callback = function(selected)
+        flingTargets = selected
+    end
+})
+
+FlingTab:CreateButton({
+    Name = "🔄 대상 새로고침",
+    Callback = function()
+        TargetDropdown:Set(getPlayers())
+    end
+})
+
+local PowerSlider = FlingTab:CreateSlider({
+    Name = "플링 파워",
+    Range = {10, 500},
+    Increment = 10,
+    Suffix = "힘",
+    CurrentValue = 100,
+    Callback = function(value)
+        flingPower = value
+    end
+})
+
+FlingTab:CreateToggle({
+    Name = "⚡ 플링 활성화",
+    CurrentValue = false,
+    Callback = function(value)
+        flingActive = value
+        
+        if value then
+            local lp = game.Players.LocalPlayer
+            if not lp.Character then return end
+            
+            spawn(function()
+                while flingActive do
+                    task.wait(0.1)
+                    
+                    if #flingTargets == 0 then
+                        -- 모든 근처 플레이어 플링
+                        for _, player in ipairs(game.Players:GetPlayers()) do
+                            if player ~= lp and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                                local dist = (lp.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                                if dist < 30 then
+                                    firetouchinterest(lp.Character.HumanoidRootPart, player.Character.HumanoidRootPart, 0)
+                                    task.wait(0.02)
+                                    firetouchinterest(lp.Character.HumanoidRootPart, player.Character.HumanoidRootPart, 1)
+                                end
+                            end
+                        end
+                    else
+                        -- 선택된 플레이어만 플링
+                        for _, targetName in ipairs(flingTargets) do
+                            local player = game.Players:FindFirstChild(targetName)
+                            if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                                firetouchinterest(lp.Character.HumanoidRootPart, player.Character.HumanoidRootPart, 0)
+                                task.wait(0.02)
+                                firetouchinterest(lp.Character.HumanoidRootPart, player.Character.HumanoidRootPart, 1)
                             end
                         end
                     end
                 end
-            end
+            end)
         end
     end
-end)
+})
 
-Rayfield:Notify({Title = "로딩 완료", Content = "대상을 직접 잡으면 루프가 시작됩니다!"})
+-- UI 토글 키 안내
+Rayfield:Notify({
+    Title = "🔒 로드 완료",
+    Content = "K 키로 UI 토글 | 안티 그랩 기본 활성화",
+    Duration = 5
+})
