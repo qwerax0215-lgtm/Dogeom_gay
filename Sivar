@@ -1,444 +1,167 @@
--- [[ 1. GUI 생성부: Xeno 실행기 최적화 ]]
-local plr = game:GetService("Players").LocalPlayer
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "KickGrab_Snowball_V14"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.IgnoreGuiInset = true 
-ScreenGui.DisplayOrder = 999
+--[[
+    유니버스 (Universe) - Rayfield GUI
+    탭 구성: 메인 | 텔레포트 | 그 외
+]]
 
--- GUI 부모 설정
-local success_gui, _ = pcall(function() 
-    ScreenGui.Parent = gethui and gethui() or game:GetService("CoreGui") 
-end)
-if not success_gui then ScreenGui.Parent = plr:WaitForChild("PlayerGui") end
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- 메인 프레임
-local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0, 240, 0, 530) -- 높이 약간 증가 (버튼 추가)
-Main.Position = UDim2.new(0.1, 0, 0.3, 0)
-Main.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
-Main.Active = true
-Main.Draggable = true
-Main.ClipsDescendants = true
-local MainCorner = Instance.new("UICorner", Main)
-MainCorner.CornerRadius = UDim.new(0, 12)
+-- 윈도우 생성 (이름: 유니버스)
+local Window = Rayfield:CreateWindow({
+    Name = "유니버스 (Universe)",
+    LoadingTitle = "유니버스 로딩 중...",
+    LoadingSubtitle = "by Rayfield",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "UniverseHub", -- 설정 저장 폴더
+        FileName = "Config"
+    },
+    ToggleUIKeybind = "K", -- K키로 UI 숨기기/보이기
+    KeySystem = false, -- 키 시스템 사용 안함
+})
 
-local Title = Instance.new("TextLabel", Main)
-Title.Size = UDim2.new(1, 0, 0, 45)
-Title.Text = "Kick Grab V14 (Frost)"
-Title.TextColor3 = Color3.fromRGB(0, 255, 255) -- 프로스트 시안
-Title.BackgroundColor3 = Color3.fromRGB(20, 25, 30)
-Title.Font = Enum.Font.GothamBlack
-Title.TextSize = 18
-local TitleCorner = Instance.new("UICorner", Title)
-TitleCorner.CornerRadius = UDim.new(0, 12)
+--============================================================================--
+-- 1. 메인 탭
+--============================================================================--
+local MainTab = Window:CreateTab("메인", 4483362458) -- 4483362458은 Roblox 아이콘 ID
+local MainSection = MainTab:CreateSection("기능")
 
-local CloseBtn = Instance.new("TextButton", Main)
-CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-CloseBtn.Position = UDim2.new(1, -38, 0, 7)
-CloseBtn.Text = "X"
-CloseBtn.TextColor3 = Color3.new(1, 1, 1)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-CloseBtn.Font = Enum.Font.GothamBold
-local CloseCorner = Instance.new("UICorner", CloseBtn)
-CloseCorner.CornerRadius = UDim.new(0, 8)
+-- 환영 메시지 (알림)
+Rayfield:Notify({
+    Title = "유니버스 실행됨",
+    Content = "K키를 눌러 UI를 토글하세요.",
+    Duration = 5,
+})
 
--- 리스트 배경
-local ScrollBg = Instance.new("Frame", Main)
-ScrollBg.Size = UDim2.new(1, -20, 0, 180)
-ScrollBg.Position = UDim2.new(0, 10, 0, 55)
-ScrollBg.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-local ScrollCorner = Instance.new("UICorner", ScrollBg)
-ScrollCorner.CornerRadius = UDim.new(0, 10)
-
-local Scroll = Instance.new("ScrollingFrame", ScrollBg)
-Scroll.Size = UDim2.new(1, -10, 1, -10)
-Scroll.Position = UDim2.new(0, 5, 0, 5)
-Scroll.BackgroundTransparency = 1
-Scroll.BorderSizePixel = 0
-Scroll.ScrollBarThickness = 6
-Scroll.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
-Scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y 
-Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-
-local UIListScroll = Instance.new("UIListLayout", Scroll)
-UIListScroll.Padding = UDim.new(0, 6)
-UIListScroll.SortOrder = Enum.SortOrder.LayoutOrder
-
--- [[ 2. 서비스 및 변수 ]]
-local players = game:GetService("Players")
-local rs2 = game:GetService("RunService")
-local rep = game:GetService("ReplicatedStorage")
-local ts = game:GetService("TweenService")
-
-local State = { 
-    Target = nil, 
-    Looping = false, -- 킥그랩 루프용
-    SnowBallLooping = false, -- [신규] 눈덩이 루프용
-    AutoRagdoll = false, 
-    DetentionDist = 19,
-    Mode = "Camera" 
-}
-
--- [[ 3. 하단 UI 구성 ]]
-local BottomContainer = Instance.new("Frame", Main)
-BottomContainer.Size = UDim2.new(1, -20, 0, 280) -- 높이 증가
-BottomContainer.Position = UDim2.new(0, 10, 0, 245)
-BottomContainer.BackgroundTransparency = 1
-local BottomLayout = Instance.new("UIListLayout", BottomContainer)
-BottomLayout.Padding = UDim.new(0, 8)
-BottomLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
-local DropdownFrame = Instance.new("Frame", BottomContainer)
-DropdownFrame.Size = UDim2.new(1, 0, 0, 40)
-DropdownFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-local DropCorner = Instance.new("UICorner", DropdownFrame)
-DropCorner.CornerRadius = UDim.new(0, 8)
-
-local CurrentModeBtn = Instance.new("TextButton", DropdownFrame)
-CurrentModeBtn.Size = UDim2.new(1, 0, 1, 0)
-CurrentModeBtn.BackgroundTransparency = 1
-CurrentModeBtn.Text = "Mode: Camera"
-CurrentModeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CurrentModeBtn.Font = Enum.Font.GothamBold
-CurrentModeBtn.TextSize = 16
-
-local OptionList = Instance.new("Frame", BottomContainer)
-OptionList.Size = UDim2.new(1, 0, 0, 0)
-OptionList.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-OptionList.ClipsDescendants = true
-local OptCorner = Instance.new("UICorner", OptionList)
-OptCorner.CornerRadius = UDim.new(0, 8)
-
-local function CreateOption(name)
-    local btn = Instance.new("TextButton", OptionList)
-    btn.Size = UDim2.new(1, 0, 0, 35)
-    btn.BackgroundTransparency = 1
-    btn.Text = name
-    btn.TextColor3 = Color3.fromRGB(220, 220, 220)
-    btn.Font = Enum.Font.GothamMedium
-    btn.TextSize = 16
-    btn.MouseButton1Click:Connect(function()
-        State.Mode = name
-        CurrentModeBtn.Text = "Mode: " .. name
-        ts:Create(OptionList, TweenInfo.new(0.3, Enum.EasingStyle.Quart), {Size = UDim2.new(1, 0, 0, 0)}):Play()
-    end)
-    local listLayout = OptionList:FindFirstChildOfClass("UIListLayout") or Instance.new("UIListLayout", OptionList)
-end
-CreateOption("Camera")
-CreateOption("Up")
-CreateOption("Down")
-
-local ActionBtn = Instance.new("TextButton", BottomContainer)
-ActionBtn.Size = UDim2.new(1, 0, 0, 45)
-ActionBtn.Text = "Kick Grab: OFF"
-ActionBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-ActionBtn.TextColor3 = Color3.new(1, 1, 1)
-ActionBtn.Font = Enum.Font.GothamBold
-ActionBtn.TextSize = 18
-Instance.new("UICorner", ActionBtn).CornerRadius = UDim.new(0, 8)
-
-local RagdollBtn = Instance.new("TextButton", BottomContainer)
-RagdollBtn.Size = UDim2.new(1, 0, 0, 45)
-RagdollBtn.Text = "Auto Ragdoll: OFF"
-RagdollBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-RagdollBtn.TextColor3 = Color3.new(1, 1, 1)
-RagdollBtn.Font = Enum.Font.GothamBold
-RagdollBtn.TextSize = 18
-Instance.new("UICorner", RagdollBtn).CornerRadius = UDim.new(0, 8)
-
--- [신규] SnowBall 버튼
-local SnowBallBtn = Instance.new("TextButton", BottomContainer)
-SnowBallBtn.Size = UDim2.new(1, 0, 0, 45)
-SnowBallBtn.Text = "SnowBall Ragdoll: OFF"
-SnowBallBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-SnowBallBtn.TextColor3 = Color3.new(1, 1, 1)
-SnowBallBtn.Font = Enum.Font.GothamBold
-SnowBallBtn.TextSize = 18
-Instance.new("UICorner", SnowBallBtn).CornerRadius = UDim.new(0, 8)
-
-local isOpen = false
-CurrentModeBtn.MouseButton1Click:Connect(function()
-    isOpen = not isOpen
-    local targetHeight = isOpen and 105 or 0
-    ts:Create(OptionList, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, targetHeight)}):Play()
-end)
-
--- [[ 4. 리모트 및 유틸 ]]
-
-local function GetPallet()
-    for _, child in pairs(workspace:GetChildren()) do
-        if string.find(child.Name, "agaliaaaaa") and string.find(child.Name, "SpawnedInToys") then
-            local pallet = child:FindFirstChild("PalletLightBrown")
-            if pallet then return pallet:FindFirstChild("SoundPart") end
+-- 버튼 예시: 속도 증가
+MainTab:CreateButton({
+    Name = "속도 증가 (WalkSpeed 100)",
+    Callback = function()
+        local player = game.Players.LocalPlayer
+        if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+            player.Character.Humanoid.WalkSpeed = 100
+            Rayfield:Notify({ Title = "메인", Content = "속도가 100으로 설정됨", Duration = 2 })
         end
-    end
-    return nil
-end
+    end,
+})
 
-local function GetRemote(name)
-    if name == "Spawn" then
-        local folder = rep:FindFirstChild("MenuToys")
-        return folder and folder:FindFirstChild("SpawnToyRemoteFunction")
-    end
-    
-    -- [신규] BombEvents (눈덩이 폭발용)
-    if name == "Explode" then
-        local folder = rep:FindFirstChild("BombEvents")
-        return folder and folder:FindFirstChild("BombExplode")
-    end
-    
-    local folder2 = rep:FindFirstChild("GrabEvents")
-    if not folder2 then return nil end
-    
-    if name == "SetOwner" then return folder2:FindFirstChild("SetNetworkOwner") end
-    if name == "DestroyGrab" then return folder2:FindFirstChild("DestroyGrabLine") end
-    if name == "CreateGrab" then return folder2:FindFirstChild("CreateGrabLine") end
-    if name == "Extend" then return folder2:FindFirstChild("ExtendGrabLine") end
-    return nil
-end
+-- 버튼 예시: 점프력 증가
+MainTab:CreateButton({
+    Name = "점프력 증가 (JumpPower 100)",
+    Callback = function()
+        local player = game.Players.LocalPlayer
+        if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+            player.Character.Humanoid.JumpPower = 100
+            Rayfield:Notify({ Title = "메인", Content = "점프력이 100으로 설정됨", Duration = 2 })
+        end
+    end,
+})
 
--- [[ 5-1. 신규 엔진: SnowBall Loop ]]
-local function ExecuteSnowballLoop()
-    while State.SnowBallLooping do
-        if not ScreenGui.Parent then State.SnowBallLooping = false break end
-        
-        local myHrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
-        local targetChar = State.Target and State.Target.Character
-        local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
-        
-        local rSpawn = GetRemote("Spawn")
-        local rOwner = GetRemote("SetOwner")
-        local rExplode = GetRemote("Explode")
-        
-        if myHrp and targetHrp and rSpawn and rOwner and rExplode then
-            -- 1. 소환
-            task.spawn(function()
-                rSpawn:InvokeServer("BallSnowball", myHrp.CFrame * CFrame.new(0, 10, 20), Vector3.new(0, 0, 0))
+-- 슬라이더 예시: 속도 조절
+MainTab:CreateSlider({
+    Name = "속도 조절 (WalkSpeed)",
+    Range = {16, 200}, -- 최소, 최대
+    Increment = 1,
+    Suffix = "Speed",
+    CurrentValue = 16,
+    Flag = "SpeedSlider",
+    Callback = function(value)
+        local player = game.Players.LocalPlayer
+        if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+            player.Character.Humanoid.WalkSpeed = value
+        end
+    end,
+})
+
+--============================================================================--
+-- 2. 텔레포트 탭
+--============================================================================--
+local TeleportTab = Window:CreateTab("텔레포트", 4483362458)
+local TeleportSection = TeleportTab:CreateSection("위치 이동")
+
+-- 버튼: 스폰 지역으로 이동
+TeleportTab:CreateButton({
+    Name = "스폰 지역으로 이동",
+    Callback = function()
+        local player = game.Players.LocalPlayer
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local spawnLocation = workspace:FindFirstChild("SpawnLocation")
+            if spawnLocation then
+                player.Character.HumanoidRootPart.CFrame = spawnLocation.CFrame
+                Rayfield:Notify({ Title = "텔레포트", Content = "스폰 지역으로 이동됨", Duration = 2 })
+            else
+                Rayfield:Notify({ Title = "오류", Content = "스폰 지역을 찾을 수 없음", Duration = 2 })
+            end
+        end
+    end,
+})
+
+-- 버튼: 하늘로 이동
+TeleportTab:CreateButton({
+    Name = "하늘로 이동 (높이 500)",
+    Callback = function()
+        local player = game.Players.LocalPlayer
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local currentPos = player.Character.HumanoidRootPart.Position
+            player.Character.HumanoidRootPart.CFrame = CFrame.new(currentPos.X, 500, currentPos.Z)
+            Rayfield:Notify({ Title = "텔레포트", Content = "하늘로 이동됨", Duration = 2 })
+        end
+    end,
+})
+
+--============================================================================--
+-- 3. 그 외 탭
+--============================================================================--
+local MiscTab = Window:CreateTab("그 외", 4483362458)
+local MiscSection = MiscTab:CreateSection("기타 설정")
+
+-- 토글 예시: 무한 점프
+local InfiniteJumpEnabled = false
+local JumpConnection = nil
+
+MiscTab:CreateToggle({
+    Name = "무한 점프",
+    CurrentValue = false,
+    Flag = "InfiniteJumpToggle",
+    Callback = function(state)
+        InfiniteJumpEnabled = state
+        local player = game.Players.LocalPlayer
+        local UIS = game:GetService("UserInputService")
+
+        if InfiniteJumpEnabled then
+            -- 무한 점프 활성화
+            JumpConnection = UIS.JumpRequest:Connect(function()
+                if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+                    player.Character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
+                end
             end)
-            
-            task.wait(0.15)
-            
-            -- 2. 내 인벤토리에서 찾기
-            local invName = plr.Name .. "SpawnedInToys"
-            local inv = workspace:FindFirstChild(invName)
-            local ballPart = inv and inv:FindFirstChild("BallSnowball")
-            local ballSPart = ballPart and ballPart:FindFirstChild("SoundPart")
-            
-            if ballPart and ballSPart then
-                -- 3. 소유권 획득
-                rOwner:FireServer(ballSPart, ballSPart.CFrame)
-                
-                -- 4. 적에게 전송 및 폭발
-                ballSPart.CFrame = targetHrp.CFrame
-                rExplode:FireServer({
-                    Radius = 0, 
-                    Color = Color3.new(0, 0, 0), 
-                    TimeLength = 0, 
-                    Model = ballPart, 
-                    Type = "SnowPoof", 
-                    ExplodesByFire = false, 
-                    MaxForcePerStudSquared = 0, 
-                    Hitbox = ballSPart, 
-                    ImpactSpeed = 0, 
-                    ExplodesByPointy = false, 
-                    DestroysModel = true, 
-                    PositionPart = ballSPart
-                }, Vector3.new(0, 0, 0))
+            Rayfield:Notify({ Title = "그 외", Content = "무한 점프 켜짐", Duration = 2 })
+        else
+            -- 무한 점프 비활성화
+            if JumpConnection then
+                JumpConnection:Disconnect()
+                JumpConnection = nil
             end
+            Rayfield:Notify({ Title = "그 외", Content = "무한 점프 꺼짐", Duration = 2 })
         end
-        task.wait(0.15) -- 딜레이
-    end
-end
+    end,
+})
 
--- [[ 5-2. 기존 엔진: Kick Grab V13 (100% 유지) ]]
-local function ExecuteKickGrabLoop()
-    local lastStrikeTime = tick() 
-    local lastSpawnTime = 0 
-    local currentPalletRef = nil
-    local isPalletOwned = false
-    
-    local hasClaimed = false
-    local isBlinking = false
-    local frameToggle = true
+-- 버튼: UI 닫기
+MiscTab:CreateButton({
+    Name = "UI 닫기",
+    Callback = function()
+        Rayfield:Destroy() -- UI 완전 제거
+    end,
+})
 
-    while State.Looping do
-        if not ScreenGui.Parent then State.Looping = false break end
-        
-        local myChar = plr.Character
-        local targetChar = State.Target and State.Target.Character
-        local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        
-        local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
-        local targetBody = targetChar and (targetChar:FindFirstChild("Torso") or targetChar:FindFirstChild("UpperTorso"))
-        local cam = workspace.CurrentCamera 
-
-        if myHrp and targetHrp and cam then
-            local rOwner = GetRemote("SetOwner")
-            local rDestroy = GetRemote("DestroyGrab")
-            local rSpawn = GetRemote("Spawn")
-            
-            local distance = (myHrp.Position - targetHrp.Position).Magnitude
-            
-            -- [[ A. 원거리 진입 (>20) -> 납치 ]]
-            if distance > 20 and not hasClaimed and rOwner then
-                isBlinking = true
-                local originalCFrame = myHrp.CFrame
-                myHrp.CFrame = targetHrp.CFrame 
-                
-                local claimStart = tick()
-                while (tick() - claimStart < 0.5) do 
-                    if not State.Looping then break end
-                    myHrp.CFrame = targetHrp.CFrame
-                    rOwner:FireServer(targetHrp, targetHrp.CFrame) 
-                    if targetBody then rOwner:FireServer(targetBody, targetBody.CFrame) end
-                    rs2.Heartbeat:Wait()
-                end
-                
-                targetHrp.CFrame = originalCFrame
-                targetHrp.AssemblyLinearVelocity = Vector3.zero 
-                
-                myHrp.CFrame = originalCFrame
-                rOwner:FireServer(targetHrp, originalCFrame)
-                
-                hasClaimed = true
-                isBlinking = false 
-            
-            -- [[ B. 근거리 진입 (<=20) -> 제자리 고정 ]]
-            elseif distance <= 20 and not hasClaimed and rOwner then
-                local instantClaimStart = tick()
-                while (tick() - instantClaimStart < 0.3) do
-                    if not State.Looping then break end
-                    rOwner:FireServer(targetHrp, targetHrp.CFrame)
-                    if targetBody then rOwner:FireServer(targetBody, targetBody.CFrame) end
-                    rs2.Heartbeat:Wait()
-                end
-                hasClaimed = true 
-            end
-            
-            -- [[ C. Kick Grab Logic ]]
-            if not isBlinking and rOwner and rDestroy then
-                local detentionPos
-                if State.Mode == "Up" then detentionPos = myHrp.CFrame * CFrame.new(0, 18, 0)
-                elseif State.Mode == "Down" then detentionPos = myHrp.CFrame * CFrame.new(0, -10, 0)
-                else detentionPos = cam.CFrame * CFrame.new(0, 0, -State.DetentionDist) end
-                
-                if frameToggle then
-                    rOwner:FireServer(targetHrp, detentionPos)
-                    targetHrp.CFrame = detentionPos
-                    targetHrp.AssemblyLinearVelocity = Vector3.zero
-                    if targetBody then
-                        rOwner:FireServer(targetBody, detentionPos)
-                        targetBody.CFrame = detentionPos
-                        targetBody.AssemblyLinearVelocity = Vector3.zero
-                    end
-                else
-                    rDestroy:FireServer(targetHrp)
-                    if targetBody then rDestroy:FireServer(targetBody) end
-                end
-                frameToggle = not frameToggle
-            end
-
-            -- [[ D. Pallet AI ]]
-            if State.AutoRagdoll then
-                local pallet = GetPallet()
-                if not pallet and (tick() - lastSpawnTime > 3.0) then
-                    lastSpawnTime = tick()
-                    if rSpawn then task.spawn(function() rSpawn:InvokeServer("PalletLightBrown") end) end
-                end
-                
-                if pallet ~= currentPalletRef then currentPalletRef = pallet isPalletOwned = false end
-
-                if pallet then
-                    if not isPalletOwned then
-                        local rCreate = GetRemote("CreateGrab")
-                        local rExtend = GetRemote("Extend")
-                        pallet.CFrame = targetHrp.CFrame * CFrame.new(0, 2, 0) 
-                        if rCreate then rCreate:FireServer(pallet, pallet.CFrame) end
-                        if rExtend then rExtend:FireServer(25) end
-                        if rOwner then rOwner:FireServer(pallet, pallet.CFrame) end
-                        isPalletOwned = true
-                        task.wait(0.1) 
-                    else
-                        local currentTime = tick()
-                        local timeSinceStrike = currentTime - lastStrikeTime
-                        local targetPos
-                        if timeSinceStrike > 2.0 then
-                            targetPos = targetHrp.CFrame 
-                            pallet.AssemblyLinearVelocity = Vector3.new(0, 400, 0)
-                            pallet.AssemblyAngularVelocity = Vector3.new(1000, 1000, 1000)
-                            if timeSinceStrike > 2.15 then lastStrikeTime = currentTime end
-                        else
-                            local angle = currentTime * 15
-                            targetPos = targetHrp.CFrame * CFrame.new(math.cos(angle)*100, 50, math.sin(angle)*100)
-                            pallet.AssemblyLinearVelocity = Vector3.zero
-                            pallet.AssemblyAngularVelocity = Vector3.new(100, 100, 100)
-                        end
-                        pallet.CFrame = targetPos
-                    end
-                end
-            end
+-- 버튼: 캐릭터 리셋 (죽이기)
+MiscTab:CreateButton({
+    Name = "캐릭터 리셋",
+    Callback = function()
+        local player = game.Players.LocalPlayer
+        if player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.Health = 0
+            Rayfield:Notify({ Title = "그 외", Content = "캐릭터 리셋됨", Duration = 2 })
         end
-        rs2.Heartbeat:Wait()
-    end
-end
-
--- [[ 6. 이벤트 연결 ]]
-CloseBtn.MouseButton1Click:Connect(function() 
-    State.Looping = false 
-    State.SnowBallLooping = false -- 둘 다 끔
-    State.AutoRagdoll = false 
-    ScreenGui:Destroy() 
-end)
-
-ActionBtn.MouseButton1Click:Connect(function()
-    if not State.Target then return end
-    State.Looping = not State.Looping
-    ActionBtn.Text = State.Looping and "Kick Grab: ACTIVE" or "Kick Grab: OFF"
-    ActionBtn.BackgroundColor3 = State.Looping and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(180, 50, 50)
-    if State.Looping then task.spawn(ExecuteKickGrabLoop) end
-end)
-
-RagdollBtn.MouseButton1Click:Connect(function()
-    State.AutoRagdoll = not State.AutoRagdoll
-    if State.AutoRagdoll then
-        RagdollBtn.Text = "Auto Ragdoll: ON"
-        RagdollBtn.BackgroundColor3 = Color3.fromRGB(255, 150, 0)
-    else
-        RagdollBtn.Text = "Auto Ragdoll: OFF"
-        RagdollBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-    end
-end)
-
-SnowBallBtn.MouseButton1Click:Connect(function()
-    State.SnowBallLooping = not State.SnowBallLooping
-    if State.SnowBallLooping then
-        SnowBallBtn.Text = "SnowBall Ragdoll: ON"
-        SnowBallBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
-        task.spawn(ExecuteSnowballLoop) -- 독립 실행
-    else
-        SnowBallBtn.Text = "SnowBall Ragdoll: OFF"
-        SnowBallBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-    end
-end)
-
-local function RefreshList()
-    for _, v in pairs(Scroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
-    for _, p in pairs(players:GetPlayers()) do
-        if p ~= plr then
-            local b = Instance.new("TextButton", Scroll)
-            b.Size = UDim2.new(1, -10, 0, 40)
-            b.Text = p.DisplayName
-            b.BackgroundColor3 = (State.Target == p) and Color3.fromRGB(0, 150, 200) or Color3.fromRGB(45, 45, 55)
-            b.TextColor3 = Color3.new(1, 1, 1)
-            b.Font = Enum.Font.GothamBold
-            b.TextSize = 16
-            Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
-            b.MouseButton1Click:Connect(function() State.Target = p RefreshList() end)
-        end
-    end
-end
-
-players.PlayerAdded:Connect(RefreshList)
-players.PlayerRemoving:Connect(RefreshList)
-RefreshList()
+    end,
+})
