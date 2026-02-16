@@ -1,0 +1,464 @@
+-- 메인 윈도우 생성
+local Window = Rayfield:CreateWindow({
+   Name = "🔫 Arsenal | 반물사 올인원",
+   LoadingTitle = "Arsenal Script",
+   LoadingSubtitle = "by Rayfield",
+   Theme = "Ocean",
+   ToggleUIKeybind = "RightShift", -- UI 토글 키
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false,
+})
+
+-- 서비스 및 변수
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- 기능 상태
+local aimbotEnabled = false
+local espEnabled = false
+local triggerbotEnabled = false
+local silentAimEnabled = false
+local wallbangEnabled = false
+local noRecoilEnabled = false
+local teamCheck = true
+local fovCircle = true
+
+-- 설정값
+local aimPart = "Head"
+local fovSize = 120
+local smoothness = 1
+local espColor = Color3.fromRGB(255, 0, 0)
+
+-- FOV 원
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible = false
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Thickness = 1
+FOVCircle.NumSides = 64
+FOVCircle.Radius = fovSize
+FOVCircle.Filled = false
+FOVCircle.Transparency = 0.7
+FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+-- ESP 저장소
+local espObjects = {}
+
+-- 유틸리티 함수
+local function getClosestPlayer()
+   local closest = nil
+   local shortestDistance = fovSize
+   local mousePos = UserInputService:GetMouseLocation()
+   
+   for _, player in pairs(Players:GetPlayers()) do
+      if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+         -- 팀 체크
+         if teamCheck and player.Team == LocalPlayer.Team then
+            continue
+         end
+         
+         local head = player.Character:FindFirstChild(aimPart) or player.Character:FindFirstChild("Head")
+         if head then
+            local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+            if onScreen then
+               local distance = (Vector2.new(headPos.X, headPos.Y) - mousePos).Magnitude
+               if distance < shortestDistance then
+                  shortestDistance = distance
+                  closest = player
+               end
+            end
+         end
+      end
+   end
+   
+   return closest
+end
+
+-- ESP 생성 함수
+local function createESP(player)
+   if espObjects[player] then return end
+   
+   local esp = {
+      highlight = Instance.new("Highlight"),
+      nameTag = Drawing.new("Text")
+   }
+   
+   esp.highlight.Adornee = player.Character
+   esp.highlight.FillColor = espColor
+   esp.highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+   esp.highlight.FillTransparency = 0.5
+   esp.highlight.Parent = player.Character
+   
+   esp.nameTag.Size = 16
+   esp.nameTag.Center = true
+   esp.nameTag.Outline = true
+   esp.nameTag.Font = 2
+   esp.nameTag.Color = Color3.fromRGB(255, 255, 255)
+   
+   espObjects[player] = esp
+end
+
+-- ESP 제거 함수
+local function removeESP(player)
+   if espObjects[player] then
+      espObjects[player].highlight:Destroy()
+      espObjects[player].nameTag:Remove()
+      espObjects[player] = nil
+   end
+end
+
+-- 탭 생성
+local MainTab = Window:CreateTab("🎮 메인", "home")
+local AimbotTab = Window:CreateTab("🎯 에임봇", "crosshair")
+local VisualTab = Window:CreateTab("👁️ 비주얼", "eye")
+local MiscTab = Window:CreateTab("⚙️ 기타", "settings")
+
+-- ===== 메인 탭 =====
+MainTab:CreateSection("이동 설정")
+
+MainTab:CreateSlider({
+   Name = "이동 속도",
+   Range = {16, 120},
+   Increment = 1,
+   Suffix = "속도",
+   CurrentValue = 16,
+   Callback = function(value)
+      if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+         LocalPlayer.Character.Humanoid.WalkSpeed = value
+      end
+   end,
+})
+
+MainTab:CreateSlider({
+   Name = "점프력",
+   Range = {50, 200},
+   Increment = 5,
+   Suffix = "파워",
+   CurrentValue = 50,
+   Callback = function(value)
+      if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+         LocalPlayer.Character.Humanoid.JumpPower = value
+      end
+   end,
+})
+
+MainTab:CreateToggle({
+   Name = "비행 모드",
+   CurrentValue = false,
+   Callback = function(value)
+      local char = LocalPlayer.Character
+      if char then
+         local humanoid = char:FindFirstChild("Humanoid")
+         if humanoid then
+            humanoid.PlatformStand = value
+            if value then
+               game:GetService("UserInputService").JumpRequest:Connect(function()
+                  humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+               end)
+            end
+         end
+      end
+   end,
+})
+
+-- ===== 에임봇 탭 =====
+AimbotTab:CreateSection("에임봇 설정")
+
+AimbotTab:CreateToggle({
+   Name = "에임봇 활성화",
+   CurrentValue = false,
+   Callback = function(value)
+      aimbotEnabled = value
+      Rayfield:Notify({
+         Title = "에임봇",
+         Content = value and "활성화됨 ✅" or "비활성화됨 ❌",
+         Duration = 2.5,
+         Image = "rbxassetid://4483345998"
+      })
+   end,
+})
+
+AimbotTab:CreateToggle({
+   Name = "사일런트 에임",
+   CurrentValue = false,
+   Callback = function(value)
+      silentAimEnabled = value
+   end,
+})
+
+AimbotTab:CreateToggle({
+   Name = "트리거봇",
+   CurrentValue = false,
+   Callback = function(value)
+      triggerbotEnabled = value
+   end,
+})
+
+AimbotTab:CreateToggle({
+   Name = "팀 확인 (아군 제외)",
+   CurrentValue = true,
+   Callback = function(value)
+      teamCheck = value
+   end,
+})
+
+AimbotTab:CreateDropdown({
+   Name = "조준 부위",
+   Options = {"Head", "Torso", "HumanoidRootPart"},
+   CurrentOption = "Head",
+   Callback = function(option)
+      aimPart = option
+   end,
+})
+
+AimbotTab:CreateSlider({
+   Name = "FOV 크기",
+   Range = {30, 300},
+   Increment = 5,
+   Suffix = "px",
+   CurrentValue = 120,
+   Callback = function(value)
+      fovSize = value
+      FOVCircle.Radius = value
+   end,
+})
+
+AimbotTab:CreateToggle({
+   Name = "FOV 원 표시",
+   CurrentValue = true,
+   Callback = function(value)
+      fovCircle = value
+      FOVCircle.Visible = value
+   end,
+})
+
+AimbotTab:CreateSlider({
+   Name = "에임 스무딩",
+   Range = {1, 20},
+   Increment = 1,
+   Suffix = "강도",
+   CurrentValue = 1,
+   Callback = function(value)
+      smoothness = value
+   end,
+})
+
+-- ===== 비주얼 탭 =====
+VisualTab:CreateSection("ESP 설정")
+
+VisualTab:CreateToggle({
+   Name = "ESP 활성화",
+   CurrentValue = false,
+   Callback = function(value)
+      espEnabled = value
+      if value then
+         for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+               createESP(player)
+            end
+         end
+      else
+         for player, _ in pairs(espObjects) do
+            removeESP(player)
+         end
+      end
+   end,
+})
+
+VisualTab:CreateToggle({
+   Name = "박스 ESP",
+   CurrentValue = false,
+   Callback = function(value)
+      -- 박스 ESP 구현
+   end,
+})
+
+VisualTab:CreateToggle({
+   Name = "이름 ESP",
+   CurrentValue = true,
+   Callback = function(value)
+      -- 이름 ESP 구현
+   end,
+})
+
+VisualTab:CreateToggle({
+   Name = "거리 표시",
+   CurrentValue = false,
+   Callback = function(value)
+      -- 거리 표시 구현
+   end,
+})
+
+VisualTab:CreateColorPicker({
+   Name = "ESP 색상",
+   Color = Color3.fromRGB(255, 0, 0),
+   Callback = function(color)
+      espColor = color
+      for _, esp in pairs(espObjects) do
+         if esp.highlight then
+            esp.highlight.FillColor = color
+         end
+      end
+   end,
+})
+
+-- ===== 기타 탭 =====
+MiscTab:CreateSection("총기 설정")
+
+MiscTab:CreateToggle({
+   Name = "노리쇠 (무반동)",
+   CurrentValue = false,
+   Callback = function(value)
+      noRecoilEnabled = value
+   end,
+})
+
+MiscTab:CreateToggle({
+   Name = "월샷 (관통)",
+   CurrentValue = false,
+   Callback = function(value)
+      wallbangEnabled = value
+   end,
+})
+
+MiscTab:CreateSection("기타 기능")
+
+MiscTab:CreateButton({
+   Name = "모든 총알 무한",
+   Callback = function()
+      local char = LocalPlayer.Character
+      if char then
+         local tool = char:FindFirstChildWhichIsA("Tool")
+         if tool and tool:FindFirstChild("Ammo") then
+            tool.Ammo.Value = math.huge
+            Rayfield:Notify({
+               Title = "무한 탄약",
+               Content = "적용 완료!",
+               Duration = 2
+            })
+         end
+      end
+   end,
+})
+
+MiscTab:CreateButton({
+   Name = "즉시 리스폰",
+   Callback = function()
+      local char = LocalPlayer.Character
+      if char and char:FindFirstChild("Humanoid") then
+         char.Humanoid.Health = 0
+      end
+   end,
+})
+
+MiscTab:CreateButton({
+   Name = "모든 스킨 잠금해제",
+   Callback = function()
+      -- 스킨 언락 코드
+      Rayfield:Notify({
+         Title = "스킨 언락",
+         Content = "이 기능은 현재 개발중입니다",
+         Duration = 3
+      })
+   end,
+})
+
+-- ===== 루프 기능 =====
+RunService.RenderStepped:Connect(function()
+   -- FOV 원 위치 업데이트
+   if fovCircle then
+      FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+   end
+
+   -- 에임봇
+   if aimbotEnabled then
+      local target = getClosestPlayer()
+      if target and target.Character then
+         local part = target.Character:FindFirstChild(aimPart) or target.Character:FindFirstChild("Head")
+         if part then
+            local partPos = part.Position
+            if smoothness > 1 then
+               -- 부드러운 에임
+               local currentPos = Camera.CFrame.Position
+               local targetCFrame = CFrame.lookAt(currentPos, partPos)
+               Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 0.1 / smoothness)
+            else
+               -- 즉시 조준
+               Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, partPos)
+            end
+         end
+      end
+   end
+
+   -- 트리거봇
+   if triggerbotEnabled then
+      local mouse = LocalPlayer:GetMouse()
+      local target = mouse.Target
+      if target and target.Parent then
+         local player = Players:GetPlayerFromCharacter(target.Parent)
+         if player and player ~= LocalPlayer then
+            if not teamCheck or player.Team ~= LocalPlayer.Team then
+               mouse1press()
+               wait(0.01)
+               mouse1release()
+            end
+         end
+      end
+   end
+
+   -- ESP 업데이트
+   if espEnabled then
+      for player, esp in pairs(espObjects) do
+         if player.Character and player.Character:FindFirstChild("Head") then
+            local headPos, onScreen = Camera:WorldToViewportPoint(player.Character.Head.Position)
+            if onScreen then
+               esp.nameTag.Position = Vector2.new(headPos.X, headPos.Y - 50)
+               esp.nameTag.Text = player.Name .. " [" .. math.floor(player.Character.Humanoid.Health) .. "HP]"
+               esp.nameTag.Visible = true
+               
+               -- 팀 색상 적용
+               if player.Team == LocalPlayer.Team then
+                  esp.nameTag.Color = Color3.fromRGB(0, 255, 0)
+               else
+                  esp.nameTag.Color = Color3.fromRGB(255, 0, 0)
+               end
+            else
+               esp.nameTag.Visible = false
+            end
+         else
+            esp.nameTag.Visible = false
+         end
+      end
+   end
+
+   -- 무반동
+   if noRecoilEnabled and LocalPlayer.Character then
+      local tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
+      if tool and tool:FindFirstChild("Recoil") then
+         tool.Recoil:Destroy()
+      end
+   end
+end)
+
+-- 플레이어 추가/제거 이벤트
+Players.PlayerAdded:Connect(function(player)
+   player.CharacterAdded:Connect(function()
+      if espEnabled then
+         createESP(player)
+      end
+   end)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+   removeESP(player)
+end)
+
+-- UI 토글 알림
+Rayfield:Notify({
+   Title = "스크립트 로드 완료",
+   Content = "RightShift 키로 UI를 토글하세요",
+   Duration = 3,
+   Image = "rbxassetid://4483345998"
+})
