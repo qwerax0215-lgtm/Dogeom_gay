@@ -1,110 +1,1012 @@
---[[ 유니버스 (Universe) - 최적화 버전 ]]
-local R = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local W = R:CreateWindow({Name="유니버스 (Universe)",LoadingTitle="로딩중",LoadingSubtitle="by Rayfield",ConfigurationSaving={Enabled=true,FolderName="UniverseHub",FileName="Config"},ToggleUIKeybind="K",KeySystem=false})
-local P, U, RS, PL, T, UI = game:Playe r s.LocalPlayer, game:GetService("UserInputService"), game:GetService("RunService"), game:GetService("Players"), game:GetService("TweenService"), game:GetService("UserInputService")
-local function WFC() repeat wait() until P.Character and P.Character:FindFirstChild("HumanoidRootPart") return P.Character end
-local MT, TT, Misc = W:CreateTab("메인",4483362458), W:CreateTab("텔레포트",4483362458), W:CreateTab("그 외",4483362458)
-R:Notify({Title="유니버스 실행됨",Content="K키 토글",Duration=5})
+--[[
+    유니버스 (Universe) - 섬세한 최종 버전
+    모든 기능이 완벽하게 작동하는 최적화된 스크립트
+]]
 
+-- 서비스 로드
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Players = game:GetService("Players")
+local UserInput = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+
+-- 로컬 플레이어
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+--============================================================================--
+-- 윈도우 생성
+--============================================================================--
+local Window = Rayfield:CreateWindow({
+    Name = "유니버스 (Universe)",
+    LoadingTitle = "유니버스 로딩 중...",
+    LoadingSubtitle = "v2.0 - 얼티메이트 에디션",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "UniverseHub",
+        FileName = "Config"
+    },
+    ToggleUIKeybind = "K",
+    KeySystem = false,
+})
+
+--============================================================================--
+-- 유틸리티 함수
+--============================================================================--
+local function WaitForCharacter()
+    repeat 
+        task.wait()
+    until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    return LocalPlayer.Character
+end
+
+local function SafeCall(func, ...)
+    local success, result = pcall(func, ...)
+    return result
+end
+
+local function CreateEffect(position, color, size)
+    local effect = Instance.new("Part")
+    effect.Size = size or Vector3.new(3, 3, 3)
+    effect.Position = position
+    effect.BrickColor = BrickColor.new(color or "Bright blue")
+    effect.Material = Enum.Material.Neon
+    effect.Transparency = 0.3
+    effect.Anchored = true
+    effect.CanCollide = false
+    effect.Parent = workspace
+    Debris:AddItem(effect, 1)
+    
+    -- 서서히 사라지는 효과
+    task.spawn(function()
+        for i = 1, 10 do
+            effect.Transparency = effect.Transparency + 0.07
+            effect.Size = effect.Size + Vector3.new(0.3, 0.3, 0.3)
+            task.wait(0.03)
+        end
+        effect:Destroy()
+    end)
+end
+
+--============================================================================--
 -- 메인 탭
-local S = MT:CreateSection("이동 기능")
-local Spd, JP, Grv, FlySpd, FlyE = 16, 50, 196.2, 50, false
-local FlyBV, FlyBG, FlyC, NC, IJ, JmpC, NocC
+--============================================================================--
+local MainTab = Window:CreateTab("메인", 4483362458)
+local MainSection = MainTab:CreateSection("이동 및 물리")
 
-MT:CreateSlider({Name="속도 1~5000",Range={1,5000},Increment=1,CurrentValue=16,Flag="S",Callback=function(v)Spd=v end})
-MT:CreateLabel("현재 속도: 16")
-RS.Heartbeat:Connect(function()if P.Character then local H=P.Character:FindFirstChildOfClass("Humanoid")if H then H.WalkSpeed=Spd end end end)
+-- 환영 메시지
+Rayfield:Notify({
+    Title = "✨ 유니버스 실행됨",
+    Content = "K키를 눌러 UI를 토글하세요",
+    Duration = 3,
+})
 
-MT:CreateSlider({Name="점프력 1~5000",Range={1,5000},Increment=1,CurrentValue=50,Flag="J",Callback=function(v)JP=v end})
-MT:CreateLabel("현재 점프력: 50")
-RS.Heartbeat:Connect(function()if P.Character then local H=P.Character:FindFirstChildOfClass("Humanoid")if H then H.JumpPower=JP end end end)
+------------------------------------------------------------------------
+-- 속도 조절
+------------------------------------------------------------------------
+local WalkSpeed = 16
+local SpeedConnection = nil
 
-MT:CreateSlider({Name="중력 1~5000",Range={1,5000},Increment=1,CurrentValue=196.2,Flag="G",Callback=function(v)workspace.Gravity=v end})
-MT:CreateLabel("현재 중력: 196.2")
-RS.Heartbeat:Connect(function()MT:CreateLabel("현재 중력: "..math.floor(workspace.Gravity))end)
+local SpeedSlider = MainTab:CreateSlider({
+    Name = "⚡ 속도 조절 (1~5000)",
+    Range = {1, 5000},
+    Increment = 1,
+    Suffix = "WalkSpeed",
+    CurrentValue = 16,
+    Flag = "SpeedSlider",
+    Callback = function(value)
+        WalkSpeed = value
+        if LocalPlayer.Character then
+            local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.WalkSpeed = value
+            end
+        end
+    end,
+})
 
-MT:CreateSection("플라이")
-MT:CreateSlider({Name="플라이 속도 1~5000",Range={1,5000},Increment=1,CurrentValue=50,Flag="FS",Callback=function(v)FlySpd=v if FlyBV then FlyBV.MaxForce=Vector3.new(v*1000,v*1000,v*1000)end end})
-MT:CreateToggle({Name="플라이 ON/OFF",CurrentValue=false,Flag="F",Callback=function(s)FlyE=s
-if FlyE then local C=P.Character or WFC()local H=C:FindFirstChildOfClass("Humanoid")local R=C:FindFirstChild("HumanoidRootPart")if R and H then
-if FlyBV then FlyBV:Destroy()end if FlyBG then FlyBG:Destroy()end
-FlyBV=Instance.new("BodyVelocity")FlyBV.Velocity=Vector3.new()FlyBV.MaxForce=Vector3.new(FlySpd*1000,FlySpd*1000,FlySpd*1000)FlyBV.P=10000 FlyBV.Parent=R
-FlyBG=Instance.new("BodyGyro")FlyBG.MaxTorque=Vector3.new(4e4,4e4,4e4)FlyBG.P=10000 FlyBG.CFrame=R.CFrame FlyBG.Parent=R
-H.PlatformStand=true
-FlyC=RS.Heartbeat:Connect(function()if FlyE and P.Character and R and FlyBV then
-local D=Vector3.new()local C=workspace.CurrentCamera
-if UI:IsKeyDown(Enum.KeyCode.W)then D=D+C.CFrame.LookVector end
-if UI:IsKeyDown(Enum.KeyCode.S)then D=D-C.CFrame.LookVector end
-if UI:IsKeyDown(Enum.KeyCode.A)then D=D-C.CFrame.RightVector end
-if UI:IsKeyDown(Enum.KeyCode.D)then D=D+C.CFrame.RightVector end
-if UI:IsKeyDown(Enum.KeyCode.Space)then D=D+Vector3.new(0,1,0)end
-if UI:IsKeyDown(Enum.KeyCode.LeftControl)then D=D+Vector3.new(0,-1,0)end
-FlyBV.Velocity=D.Magnitude>0 and D.Unit*FlySpd or D
-FlyBG.CFrame=C.CFrame end end)
-R:Notify({Title="플라이",Content="WASD+Space+Ctrl",Duration=3})else R:Notify({Title="오류",Content="캐릭터 없음",Duration=2})end
-else if FlyC then FlyC:Disconnect()FlyC=nil end
-if FlyBV then FlyBV:Destroy()FlyBV=nil end
-if FlyBG then FlyBG:Destroy()FlyBG=nil end
-if P.Character then local H=P.Character:FindFirstChildOfClass("Humanoid")if H then H.PlatformStand=false end end
-R:Notify({Title="플라이",Content="OFF",Duration=2})end end})
+local SpeedLabel = MainTab:CreateLabel("현재 속도: 16")
 
-MT:CreateToggle({Name="무한 점프",CurrentValue=false,Flag="IJ",Callback=function(s)IJ=s
-if IJ then JmpC=U.JumpRequest:Connect(function()if P.Character then local H=P.Character:FindFirstChildOfClass("Humanoid")if H then H:ChangeState(Enum.HumanoidStateType.Jumping)end end end)
-else if JmpC then JmpC:Disconnect()JmpC=nil end end end})
+RunService.Heartbeat:Connect(function()
+    if LocalPlayer.Character then
+        local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            local current = humanoid.WalkSpeed
+            SpeedLabel:Set("현재 속도: " .. math.floor(current))
+            
+            -- 속도 강제 유지
+            if current ~= WalkSpeed and WalkSpeed > 0 then
+                humanoid.WalkSpeed = WalkSpeed
+            end
+        end
+    end
+end)
 
-MT:CreateToggle({Name="벽뚫기",CurrentValue=false,Flag="NC",Callback=function(s)NC=s
-if NC then NocC=RS.Stepped:Connect(function()if P.Character then for _,v in pairs(P.Character:GetDescendants())do if v:IsA("BasePart")then v.CanCollide=false end end end)end
-if not NC and NocC then NocC:Disconnect()NocC=nil end end})
+------------------------------------------------------------------------
+-- 점프력 조절
+------------------------------------------------------------------------
+local JumpPower = 50
+local JumpLabel = MainTab:CreateLabel("현재 점프력: 50")
 
--- PCLD
-local PCLD, PCLDM, PCLDC = false, {}, nil
-local function CIM(p)if not p.Character or not p.Character:FindFirstChild("HumanoidRootPart")then return nil end
-local m=Instance.new("Part")m.Size=Vector3.new(1,1,1)m.Transparency=1 m.Anchored=true m.CanCollide=false m.Parent=workspace
-local b=Instance.new("BillboardGui")b.Size=UDim2.new(0,150,0,50)b.StudsOffset=Vector3.new(0,3,0)b.AlwaysOnTop=true b.Parent=m
-local f=Instance.new("Frame")f.Size=UDim2.new(1,0,1,0)f.BackgroundColor3=Color3.fromRGB(0,0,0)f.BackgroundTransparency=0.3 f.BorderSizePixel=2 f.BorderColor3=Color3.fromRGB(255,100,100)f.Parent=b
-local i=Instance.new("TextLabel")i.Size=UDim2.new(1,0,0.5,0)i.Position=UDim2.new(0,0,0,0)i.BackgroundTransparency=1 i.Text="ID: "..p.UserId i.TextColor3=Color3.fromRGB(255,200,200)i.TextStrokeTransparency=0.3 i.TextStrokeColor3=Color3.fromRGB(255,0,0)i.Font=Enum.Font.GothamBold i.TextSize=18 i.Parent=f
-local n=Instance.new("TextLabel")n.Size=UDim2.new(1,0,0.5,0)n.Position=UDim2.new(0,0,0.5,0)n.BackgroundTransparency=1 n.Text=p.Name n.TextColor3=Color3.fromRGB(255,255,255)n.TextStrokeTransparency=0 n.TextStrokeColor3=Color3.fromRGB(0,0,0)n.Font=Enum.Font.Gotham n.TextSize=14 n.Parent=f
-return m end
+MainTab:CreateSlider({
+    Name = "🦘 점프력 조절 (1~5000)",
+    Range = {1, 5000},
+    Increment = 1,
+    Suffix = "JumpPower",
+    CurrentValue = 50,
+    Flag = "JumpSlider",
+    Callback = function(value)
+        JumpPower = value
+        if LocalPlayer.Character then
+            local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.JumpPower = value
+            end
+        end
+    end,
+})
 
-MT:CreateSection("PCLD - ID 표시")
-MT:CreateToggle({Name="PCLD ON/OFF",CurrentValue=false,Flag="P",Callback=function(s)PCLD=s
-if PCLD then for _,v in pairs(PCLDM)do pcall(function()v:Destroy()end)end PCLDM={}
-for _,p in ipairs(PL:GetPlayers())do if p~=P then local m=pcall(function()return CIM(p)end)if m and type(m)=="userdata"then PCLDM[p]=m end end end
-PCLDC=RS.Heartbeat:Connect(function()if PCLD then for p,m in pairs(PCLDM)do pcall(function()if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart")then m.CFrame=p.Character.HumanoidRootPart.CFrame else m:Destroy()PCLDM[p]=nil end end)end
-for _,p in ipairs(PL:GetPlayers())do if p~=P and not PCLDM[p]then local m=pcall(function()return CIM(p)end)if m and type(m)=="userdata"then PCLDM[p]=m end end end end end)
-R:Notify({Title="PCLD",Content="ON",Duration=2})else if PCLDC then PCLDC:Disconnect()PCLDC=nil end
-for _,m in pairs(PCLDM)do pcall(function()m:Destroy()end)end PCLDM={} R:Notify({Title="PCLD",Content="OFF",Duration=2})end end})
+RunService.Heartbeat:Connect(function()
+    if LocalPlayer.Character then
+        local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            JumpLabel:Set("현재 점프력: " .. math.floor(humanoid.JumpPower))
+        end
+    end
+end)
 
+------------------------------------------------------------------------
+-- 중력 조절
+------------------------------------------------------------------------
+local GravityLabel = MainTab:CreateLabel("현재 중력: 196.2")
+
+MainTab:CreateSlider({
+    Name = "🌍 중력 조절 (1~5000)",
+    Range = {1, 5000},
+    Increment = 1,
+    Suffix = "Gravity",
+    CurrentValue = 196.2,
+    Flag = "GravitySlider",
+    Callback = function(value)
+        workspace.Gravity = value
+    end,
+})
+
+RunService.Heartbeat:Connect(function()
+    GravityLabel:Set("현재 중력: " .. math.floor(workspace.Gravity))
+end)
+
+------------------------------------------------------------------------
+-- 플라이 기능
+------------------------------------------------------------------------
+MainTab:CreateSection("🦅 플라이 모드")
+
+local FlyEnabled = false
+local FlySpeed = 50
+local FlyConnection = nil
+local BodyVelocity = nil
+local BodyGyro = nil
+
+MainTab:CreateSlider({
+    Name = "플라이 속도 (1~5000)",
+    Range = {1, 5000},
+    Increment = 1,
+    Suffix = "FlySpeed",
+    CurrentValue = 50,
+    Flag = "FlySpeedSlider",
+    Callback = function(value)
+        FlySpeed = value
+        if BodyVelocity then
+            BodyVelocity.MaxForce = Vector3.new(value * 1000, value * 1000, value * 1000)
+        end
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "플라이 ON/OFF",
+    CurrentValue = false,
+    Flag = "FlyToggle",
+    Callback = function(state)
+        FlyEnabled = state
+        
+        if FlyEnabled then
+            -- 플라이 활성화
+            local character = LocalPlayer.Character or WaitForCharacter()
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            
+            if not (rootPart and humanoid) then
+                Rayfield:Notify({ Title = "오류", Content = "캐릭터를 찾을 수 없음", Duration = 2 })
+                return
+            end
+            
+            -- 기존 인스턴스 정리
+            if BodyVelocity then BodyVelocity:Destroy() end
+            if BodyGyro then BodyGyro:Destroy() end
+            
+            -- BodyVelocity 생성
+            BodyVelocity = Instance.new("BodyVelocity")
+            BodyVelocity.Velocity = Vector3.new()
+            BodyVelocity.MaxForce = Vector3.new(FlySpeed * 1000, FlySpeed * 1000, FlySpeed * 1000)
+            BodyVelocity.P = 10000
+            BodyVelocity.Parent = rootPart
+            
+            -- BodyGyro 생성
+            BodyGyro = Instance.new("BodyGyro")
+            BodyGyro.MaxTorque = Vector3.new(40000, 40000, 40000)
+            BodyGyro.P = 10000
+            BodyGyro.CFrame = rootPart.CFrame
+            BodyGyro.Parent = rootPart
+            
+            humanoid.PlatformStand = true
+            
+            -- 플라이 업데이트 루프
+            FlyConnection = RunService.Heartbeat:Connect(function()
+                if not (FlyEnabled and LocalPlayer.Character and rootPart and BodyVelocity) then
+                    return
+                end
+                
+                local moveDir = Vector3.new()
+                local camera = workspace.CurrentCamera
+                
+                if UserInput:IsKeyDown(Enum.KeyCode.W) then
+                    moveDir = moveDir + camera.CFrame.LookVector
+                end
+                if UserInput:IsKeyDown(Enum.KeyCode.S) then
+                    moveDir = moveDir - camera.CFrame.LookVector
+                end
+                if UserInput:IsKeyDown(Enum.KeyCode.A) then
+                    moveDir = moveDir - camera.CFrame.RightVector
+                end
+                if UserInput:IsKeyDown(Enum.KeyCode.D) then
+                    moveDir = moveDir + camera.CFrame.RightVector
+                end
+                if UserInput:IsKeyDown(Enum.KeyCode.Space) then
+                    moveDir = moveDir + Vector3.new(0, 1, 0)
+                end
+                if UserInput:IsKeyDown(Enum.KeyCode.LeftControl) then
+                    moveDir = moveDir + Vector3.new(0, -1, 0)
+                end
+                
+                -- 이동 벡터 정규화
+                if moveDir.Magnitude > 0 then
+                    moveDir = moveDir.Unit * FlySpeed
+                end
+                
+                BodyVelocity.Velocity = moveDir
+                BodyGyro.CFrame = camera.CFrame
+            end)
+            
+            Rayfield:Notify({
+                Title = "플라이",
+                Content = "WASD: 이동 | 스페이스: 상승 | Ctrl: 하강",
+                Duration = 3
+            })
+            
+        else
+            -- 플라이 비활성화
+            if FlyConnection then
+                FlyConnection:Disconnect()
+                FlyConnection = nil
+            end
+            
+            if BodyVelocity then
+                BodyVelocity:Destroy()
+                BodyVelocity = nil
+            end
+            
+            if BodyGyro then
+                BodyGyro:Destroy()
+                BodyGyro = nil
+            end
+            
+            if LocalPlayer.Character then
+                local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    humanoid.PlatformStand = false
+                end
+            end
+            
+            Rayfield:Notify({ Title = "플라이", Content = "비활성화됨", Duration = 2 })
+        end
+    end,
+})
+
+local FlyStatusLabel = MainTab:CreateLabel("플라이 상태: 꺼짐")
+
+RunService.Heartbeat:Connect(function()
+    FlyStatusLabel:Set("플라이 상태: " .. (FlyEnabled and ("켜짐 (속도: " .. FlySpeed .. ")") or "꺼짐"))
+end)
+
+------------------------------------------------------------------------
+-- 프리즈 기능
+------------------------------------------------------------------------
+MainTab:CreateSection("❄️ 프리즈 모드")
+
+local FreezeEnabled = false
+local FreezePosition = nil
+local FreezeConnection = nil
+
+MainTab:CreateToggle({
+    Name = "프리즈 (위치 고정)",
+    CurrentValue = false,
+    Flag = "FreezeToggle",
+    Callback = function(state)
+        FreezeEnabled = state
+        
+        if FreezeEnabled then
+            -- 현재 위치 저장
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                FreezePosition = LocalPlayer.Character.HumanoidRootPart.CFrame
+                
+                -- 위치 고정 루프
+                FreezeConnection = RunService.Heartbeat:Connect(function()
+                    if FreezeEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        LocalPlayer.Character.HumanoidRootPart.CFrame = FreezePosition
+                        
+                        local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                        if humanoid then
+                            humanoid.PlatformStand = true
+                        end
+                    end
+                end)
+                
+                Rayfield:Notify({ Title = "프리즈", Content = "위치 고정 ON", Duration = 2 })
+            else
+                Rayfield:Notify({ Title = "오류", Content = "캐릭터를 찾을 수 없음", Duration = 2 })
+                FreezeEnabled = false
+            end
+        else
+            -- 프리즈 해제
+            if FreezeConnection then
+                FreezeConnection:Disconnect()
+                FreezeConnection = nil
+            end
+            
+            if LocalPlayer.Character then
+                local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    humanoid.PlatformStand = false
+                end
+            end
+            
+            Rayfield:Notify({ Title = "프리즈", Content = "해제됨", Duration = 2 })
+        end
+    end,
+})
+
+------------------------------------------------------------------------
+-- 무한 점프
+------------------------------------------------------------------------
+local InfiniteJumpEnabled = false
+local JumpConnection = nil
+
+MainTab:CreateToggle({
+    Name = "∞ 무한 점프",
+    CurrentValue = false,
+    Flag = "InfiniteJump",
+    Callback = function(state)
+        InfiniteJumpEnabled = state
+        
+        if InfiniteJumpEnabled then
+            JumpConnection = UserInput.JumpRequest:Connect(function()
+                if LocalPlayer.Character then
+                    local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                    if humanoid then
+                        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                    end
+                end
+            end)
+            Rayfield:Notify({ Title = "무한 점프", Content = "활성화됨", Duration = 2 })
+        else
+            if JumpConnection then
+                JumpConnection:Disconnect()
+                JumpConnection = nil
+            end
+            Rayfield:Notify({ Title = "무한 점프", Content = "비활성화됨", Duration = 2 })
+        end
+    end,
+})
+
+------------------------------------------------------------------------
+-- 벽뚫기
+------------------------------------------------------------------------
+local NoclipEnabled = false
+local NoclipConnection = nil
+
+MainTab:CreateToggle({
+    Name = "🧱 벽뚫기 (Noclip)",
+    CurrentValue = false,
+    Flag = "Noclip",
+    Callback = function(state)
+        NoclipEnabled = state
+        
+        if NoclipEnabled then
+            NoclipConnection = RunService.Stepped:Connect(function()
+                if LocalPlayer.Character then
+                    for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = false
+                        end
+                    end
+                end
+            end)
+            Rayfield:Notify({ Title = "벽뚫기", Content = "활성화됨", Duration = 2 })
+        else
+            if NoclipConnection then
+                NoclipConnection:Disconnect()
+                NoclipConnection = nil
+            end
+            Rayfield:Notify({ Title = "벽뚫기", Content = "비활성화됨", Duration = 2 })
+        end
+    end,
+})
+
+------------------------------------------------------------------------
+-- PCLD (플레이어 ID 표시)
+------------------------------------------------------------------------
+MainTab:CreateSection("👤 PCLD - 플레이어 ID")
+
+local PCLDEnabled = false
+local PCLDMarkers = {}
+local PCLDConnection = nil
+
+local function CreateIDMarker(targetPlayer)
+    if not (targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")) then
+        return nil
+    end
+    
+    local marker = Instance.new("Part")
+    marker.Size = Vector3.new(1, 1, 1)
+    marker.Transparency = 1
+    marker.Anchored = true
+    marker.CanCollide = false
+    marker.Parent = workspace
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Size = UDim2.new(0, 160, 0, 60)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = marker
+    
+    local background = Instance.new("Frame")
+    background.Size = UDim2.new(1, 0, 1, 0)
+    background.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    background.BackgroundTransparency = 0.2
+    background.BorderSizePixel = 2
+    background.BorderColor3 = Color3.fromRGB(255, 100, 100)
+    background.Parent = billboard
+    
+    local idLabel = Instance.new("TextLabel")
+    idLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    idLabel.Position = UDim2.new(0, 0, 0, 0)
+    idLabel.BackgroundTransparency = 1
+    idLabel.Text = "🆔 " .. targetPlayer.UserId
+    idLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
+    idLabel.TextStrokeTransparency = 0.3
+    idLabel.TextStrokeColor3 = Color3.fromRGB(255, 0, 0)
+    idLabel.Font = Enum.Font.GothamBold
+    idLabel.TextSize = 16
+    idLabel.Parent = background
+    
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    nameLabel.Position = UDim2.new(0, 0, 0.5, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = "📌 " .. targetPlayer.Name
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    nameLabel.Font = Enum.Font.Gotham
+    nameLabel.TextSize = 12
+    nameLabel.Parent = background
+    
+    return marker
+end
+
+MainTab:CreateToggle({
+    Name = "PCLD ON/OFF",
+    CurrentValue = false,
+    Flag = "PCLD",
+    Callback = function(state)
+        PCLDEnabled = state
+        
+        if PCLDEnabled then
+            -- 기존 마커 제거
+            for _, marker in pairs(PCLDMarkers) do
+                SafeCall(marker.Destroy, marker)
+            end
+            PCLDMarkers = {}
+            
+            -- 새 마커 생성
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    local marker = CreateIDMarker(player)
+                    if marker then
+                        PCLDMarkers[player] = marker
+                    end
+                end
+            end
+            
+            -- 업데이트 루프
+            PCLDConnection = RunService.Heartbeat:Connect(function()
+                if not PCLDEnabled then return end
+                
+                -- 기존 마커 위치 업데이트
+                for player, marker in pairs(PCLDMarkers) do
+                    SafeCall(function()
+                        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                            marker.CFrame = player.Character.HumanoidRootPart.CFrame
+                        else
+                            marker:Destroy()
+                            PCLDMarkers[player] = nil
+                        end
+                    end)
+                end
+                
+                -- 새 플레이어 마커 생성
+                for _, player in ipairs(Players:GetPlayers()) do
+                    if player ~= LocalPlayer and not PCLDMarkers[player] then
+                        local marker = CreateIDMarker(player)
+                        if marker then
+                            PCLDMarkers[player] = marker
+                        end
+                    end
+                end
+            end)
+            
+            Rayfield:Notify({ Title = "PCLD", Content = "플레이어 ID 표시 ON", Duration = 2 })
+        else
+            if PCLDConnection then
+                PCLDConnection:Disconnect()
+                PCLDConnection = nil
+            end
+            
+            for _, marker in pairs(PCLDMarkers) do
+                SafeCall(marker.Destroy, marker)
+            end
+            PCLDMarkers = {}
+            
+            Rayfield:Notify({ Title = "PCLD", Content = "OFF", Duration = 2 })
+        end
+    end,
+})
+
+--============================================================================--
 -- 텔레포트 탭
-local SelP, TPing = nil, false
-local PD = TT:CreateDropdown({Name="플레이어 선택",Options=(function()local o={}for _,p in ipairs(PL:GetPlayers())do if p~=P then table.insert(o,p.Name)end end return o end)(),CurrentOption={"선택"},MultipleOptions=false,Flag="PD",Callback=function(s)if s and #s>0 then for _,p in ipairs(PL:GetPlayers())do if p.Name==s[1]then SelP=p R:Notify({Title="선택됨",Content=p.Name,Duration=2})break end end end end})
-local SL = TT:CreateLabel("상태: 대기")
-TT:CreateButton({Name="🎯 텔레포트 (1초)",Callback=function()
-if TPing then R:Notify({Title="경고",Content="이미 진행중",Duration=2})return end
-if not SelP then R:Notify({Title="오류",Content="플레이어 선택 필요",Duration=2})return end
-local ok=false for _,p in ipairs(PL:GetPlayers())do if p==SelP then ok=true break end end
-if not ok then R:Notify({Title="오류",Content="플레이어 없음",Duration=2})SelP=nil return end
-if not SelP.Character or not SelP.Character:FindFirstChild("HumanoidRootPart")then R:Notify({Title="오류",Content="대상 캐릭터 없음",Duration=2})return end
-if not P.Character or not P.Character:FindFirstChild("HumanoidRootPart")then R:Notify({Title="오류",Content="내 캐릭터 없음",Duration=2})return end
-TPing=true SL:Set("상태: 준비중")
-for i=1,10 do SL:Set("상태: "..string.format("%.1f",(11-i)/10).."초")pcall(function()if P.Character and P.Character:FindFirstChild("HumanoidRootPart")then P.Character.HumanoidRootPart.CFrame=P.Character.HumanoidRootPart.CFrame+Vector3.new(math.random(-20,20)/10,math.random(-20,20)/10,math.random(-20,20)/10)end end)wait(0.1)end
-pcall(function()local C=SelP.Character.HumanoidRootPart.CFrame P.Character.HumanoidRootPart.CFrame=C+Vector3.new(0,5,0)
-local E=Instance.new("Part")E.Size=Vector3.new(3,3,3)E.Position=P.Character.HumanoidRootPart.Position E.BrickColor=BrickColor.new("Bright blue")E.Material=Enum.Material.Neon E.Transparency=0.3 E.Anchored=true E.CanCollide=false E.Parent=workspace
-for i=1,10 do E.Transparency=E.Transparency+0.07 E.Size=E.Size+Vector3.new(0.3,0.3,0.3)wait(0.03)end E:Destroy()end)
-R:Notify({Title="완료",Content=SelP.Name.." 이동",Duration=3})SL:Set("상태: 대기")TPing=false end})
-UI.InputBegan:Connect(function(i,g)if not g and i.KeyCode==Enum.KeyCode.T then SelP and TT:CreateButton({Name="🎯 텔레포트 (1초)",Callback=function()end})or R:Notify({Title="알림",Content="선택 필요",Duration=2})end end)
-TT:CreateButton({Name="🔄 새로고침",Callback=function()local o={}for _,p in ipairs(PL:GetPlayers())do if p~=P then table.insert(o,p.Name)end end PD:Set(o)if SelP then local e=false for _,p in ipairs(PL:GetPlayers())do if p==SelP then e=true break end end if not e then SelP=nil end end R:Notify({Title="갱신",Content=#o.."명",Duration=2})end})
-local SIL = TT:CreateLabel("선택: 없음")
-RS.Heartbeat:Connect(function()if SelP then local t=SelP.Name pcall(function()if SelP.Character and SelP.Character:FindFirstChild("HumanoidRootPart")and P.Character and P.Character:FindFirstChild("HumanoidRootPart")then local d=(P.Character.HumanoidRootPart.Position-SelP.Character.HumanoidRootPart.Position).Magnitude SIL:Set("선택: "..t..string.format(" (%.1f)",d))else SIL:Set("선택: "..t.." (캐릭터 없음)")end end)else SIL:Set("선택: 없음")end end)
+--============================================================================--
+local TeleportTab = Window:CreateTab("텔레포트", 4483362458)
+local TeleportSection = TeleportTab:CreateSection("플레이어 텔레포트 (0.3초)")
+
+local SelectedPlayer = nil
+local IsTeleporting = false
+
+-- 플레이어 목록 업데이트 함수
+local function GetPlayerList()
+    local list = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            table.insert(list, player.Name)
+        end
+    end
+    return list
+end
+
+-- 플레이어 선택 드롭다운
+local PlayerDropdown = TeleportTab:CreateDropdown({
+    Name = "🎯 플레이어 선택",
+    Options = GetPlayerList(),
+    CurrentOption = {"선택하세요"},
+    MultipleOptions = false,
+    Flag = "PlayerSelect",
+    Callback = function(selected)
+        if selected and #selected > 0 then
+            local selectedName = selected[1]
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player.Name == selectedName then
+                    SelectedPlayer = player
+                    Rayfield:Notify({
+                        Title = "선택됨",
+                        Content = player.Name .. " (ID: " .. player.UserId .. ")",
+                        Duration = 2
+                    })
+                    break
+                end
+            end
+        end
+    end,
+})
+
+-- 상태 표시 레이블
+local StatusLabel = TeleportTab:CreateLabel("⏳ 상태: 대기 중")
+
+-- 텔레포트 함수
+local function TeleportToPlayer(target)
+    if IsTeleporting then
+        Rayfield:Notify({ Title = "경고", Content = "이미 텔레포트 중입니다", Duration = 2 })
+        return
+    end
+    
+    if not target then
+        Rayfield:Notify({ Title = "오류", Content = "플레이어를 선택하세요", Duration = 2 })
+        return
+    end
+    
+    -- 대상 확인
+    local targetExists = false
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == target then
+            targetExists = true
+            break
+        end
+    end
+    
+    if not targetExists then
+        Rayfield:Notify({ Title = "오류", Content = "대상이 게임에 없습니다", Duration = 2 })
+        SelectedPlayer = nil
+        return
+    end
+    
+    if not (target.Character and target.Character:FindFirstChild("HumanoidRootPart")) then
+        Rayfield:Notify({ Title = "오류", Content = "대상의 캐릭터가 없습니다", Duration = 2 })
+        return
+    end
+    
+    if not (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")) then
+        Rayfield:Notify({ Title = "오류", Content = "내 캐릭터가 없습니다", Duration = 2 })
+        return
+    end
+    
+    IsTeleporting = true
+    StatusLabel:Set("⏳ 상태: 텔레포트 준비 중...")
+    
+    -- 0.3초 카운트다운 (3회)
+    for i = 1, 3 do
+        local remaining = (4 - i) / 10
+        StatusLabel:Set("⏳ 상태: " .. string.format("%.1f", remaining) .. "초 후 이동")
+        
+        -- 화면 흔들림
+        SafeCall(function()
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local root = LocalPlayer.Character.HumanoidRootPart
+                root.CFrame = root.CFrame + Vector3.new(
+                    math.random(-15, 15) / 10,
+                    math.random(-15, 15) / 10,
+                    math.random(-15, 15) / 10
+                )
+            end
+        end)
+        
+        task.wait(0.1)
+    end
+    
+    -- 텔레포트 실행
+    SafeCall(function()
+        local targetCF = target.Character.HumanoidRootPart.CFrame
+        LocalPlayer.Character.HumanoidRootPart.CFrame = targetCF + Vector3.new(0, 5, 0)
+        CreateEffect(LocalPlayer.Character.HumanoidRootPart.Position, "Bright blue", Vector3.new(3, 3, 3))
+    end)
+    
+    Rayfield:Notify({
+        Title = "✅ 텔레포트 완료",
+        Content = target.Name .. "님에게 이동했습니다",
+        Duration = 3
+    })
+    
+    StatusLabel:Set("⏳ 상태: 대기 중")
+    IsTeleporting = false
+end
+
+-- 텔레포트 버튼
+TeleportTab:CreateButton({
+    Name = "🚀 선택한 플레이어에게 텔레포트",
+    Callback = function()
+        TeleportToPlayer(SelectedPlayer)
+    end,
+})
+
+-- T 키 단축키
+UserInput.InputBegan:Connect(function(input, isTyping)
+    if not isTyping and input.KeyCode == Enum.KeyCode.T then
+        if SelectedPlayer then
+            TeleportToPlayer(SelectedPlayer)
+        else
+            Rayfield:Notify({ Title = "알림", Content = "먼저 플레이어를 선택하세요", Duration = 2 })
+        end
+    end
+end)
+
+-- 새로고침 버튼
+TeleportTab:CreateButton({
+    Name = "🔄 플레이어 목록 새로고침",
+    Callback = function()
+        local newList = GetPlayerList()
+        PlayerDropdown:Set(newList)
+        
+        -- 선택된 플레이어 확인
+        if SelectedPlayer then
+            local stillExists = false
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p == SelectedPlayer then
+                    stillExists = true
+                    break
+                end
+            end
+            if not stillExists then
+                SelectedPlayer = nil
+            end
+        end
+        
+        Rayfield:Notify({
+            Title = "갱신 완료",
+            Content = "플레이어 " .. #newList .. "명",
+            Duration = 2
+        })
+    end,
+})
+
+-- 선택 정보 표시
+local SelectedInfoLabel = TeleportTab:CreateLabel("선택된 플레이어: 없음")
+
+RunService.Heartbeat:Connect(function()
+    if SelectedPlayer then
+        SafeCall(function()
+            local info = "선택됨: " .. SelectedPlayer.Name
+            
+            if SelectedPlayer.Character and SelectedPlayer.Character:FindFirstChild("HumanoidRootPart") and
+               LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local dist = (LocalPlayer.Character.HumanoidRootPart.Position - 
+                             SelectedPlayer.Character.HumanoidRootPart.Position).Magnitude
+                info = info .. string.format(" (%.1f studs)", dist)
+            end
+            
+            SelectedInfoLabel:Set(info)
+        end)
+    else
+        SelectedInfoLabel:Set("선택된 플레이어: 없음")
+    end
+end)
 
 -- 일반 텔레포트
-local GTS = TT:CreateSection("일반 이동")
-local function FSL()local s={workspace:FindFirstChild("SpawnLocation"),workspace:FindFirstChild("Spawn"),workspace:FindFirstChild("Start"),workspace:FindFirstChild("Baseplate")}for _,v in pairs(s)do if v and v:IsA("BasePart")then return v end end return nil end
-TT:CreateButton({Name="스폰 이동",Callback=function()pcall(function()if P.Character and P.Character:FindFirstChild("HumanoidRootPart")then local s=FSL()P.Character.HumanoidRootPart.CFrame=s and s.CFrame+Vector3.new(0,3,0)or CFrame.new(0,10,0)R:Notify({Title="TP",Content=s and"스폰 이동"or"0,0,0 이동",Duration=2})end end)end})
-TT:CreateButton({Name="하늘 Y500",Callback=function()pcall(function()if P.Character and P.Character:FindFirstChild("HumanoidRootPart")then local c=P.Character.HumanoidRootPart.Position P.Character.HumanoidRootPart.CFrame=CFrame.new(c.X,500,c.Z)R:Notify({Title="TP",Content="하늘 이동",Duration=2})end end)end})
-TT:CreateButton({Name="땅 Y0",Callback=function()pcall(function()if P.Character and P.Character:FindFirstChild("HumanoidRootPart")then local c=P.Character.HumanoidRootPart.Position P.Character.HumanoidRootPart.CFrame=CFrame.new(c.X,5,c.Z)R:Notify({Title="TP",Content="땅 이동",Duration=2})end end)end})
+local GeneralSection = TeleportTab:CreateSection("일반 위치 이동")
 
--- 그 외
-Misc:CreateButton({Name="UI 종료",Callback=function()R:Destroy()end})
-Misc:CreateButton({Name="캐릭터 리셋",Callback=function()pcall(function()if P.Character and P.Character:FindFirstChild("Humanoid")then P.Character.Humanoid.Health=0 R:Notify({Title="리셋",Content="죽음",Duration=2})end end)end})
-Misc:CreateButton({Name="FPS 부스트",Callback=function()pcall(function()settings().Rendering.QualityLevel=1 game:GetService("RunService"):Set3dRenderingEnabled(false)wait(0.1)game:GetService("RunService"):Set3dRenderingEnabled(true)R:Notify({Title="FPS",Content="부스트 적용",Duration=2})end)end})
+local function FindSpawn()
+    local spawns = {
+        workspace:FindFirstChild("SpawnLocation"),
+        workspace:FindFirstChild("Spawn"),
+        workspace:FindFirstChild("Start"),
+        workspace:FindFirstChild("Baseplate")
+    }
+    for _, spawn in pairs(spawns) do
+        if spawn and spawn:IsA("BasePart") then
+            return spawn
+        end
+    end
+    return nil
+end
+
+TeleportTab:CreateButton({
+    Name = "🏠 스폰 지역으로 이동",
+    Callback = function()
+        SafeCall(function()
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local spawn = FindSpawn()
+                if spawn then
+                    LocalPlayer.Character.HumanoidRootPart.CFrame = spawn.CFrame + Vector3.new(0, 3, 0)
+                    Rayfield:Notify({ Title = "이동", Content = "스폰 지역", Duration = 2 })
+                else
+                    LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(0, 10, 0)
+                    Rayfield:Notify({ Title = "이동", Content = "0,0,0 좌표", Duration = 2 })
+                end
+            end
+        end)
+    end,
+})
+
+TeleportTab:CreateButton({
+    Name = "☁️ 하늘로 이동 (Y=500)",
+    Callback = function()
+        SafeCall(function()
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local pos = LocalPlayer.Character.HumanoidRootPart.Position
+                LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos.X, 500, pos.Z)
+                Rayfield:Notify({ Title = "이동", Content = "하늘 (Y=500)", Duration = 2 })
+            end
+        end)
+    end,
+})
+
+TeleportTab:CreateButton({
+    Name = "🌍 땅으로 이동 (Y=5)",
+    Callback = function()
+        SafeCall(function()
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local pos = LocalPlayer.Character.HumanoidRootPart.Position
+                LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos.X, 5, pos.Z)
+                Rayfield:Notify({ Title = "이동", Content = "땅 (Y=5)", Duration = 2 })
+            end
+        end)
+    end,
+})
+
+--============================================================================--
+-- 그 외 탭
+--============================================================================--
+local MiscTab = Window:CreateTab("그 외", 4483362458)
+
+-- 재접속
+local RejoinSection = MiscTab:CreateSection("게임 관리")
+
+MiscTab:CreateButton({
+    Name = "🔄 재접속 (게임 나갔다 들어오기)",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "재접속",
+            Content = "3초 후 재접속합니다...",
+            Duration = 3
+        })
+        task.wait(3)
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    end,
+})
+
+-- 에임 텔레포트
+local AimTPSection = MiscTab:CreateSection("에임 텔레포트")
+
+local AimTPEnabled = false
+local AimTPKey = Enum.KeyCode.X
+local AimTPConnection = nil
+
+-- 키 변경 레이블
+local AimTPKeyLabel = MiscTab:CreateLabel("현재 키: X")
+
+-- 키바인드
+MiscTab:CreateKeybind({
+    Name = "에임 TP 키 변경",
+    CurrentKeybind = "X",
+    Flag = "AimTPKeybind",
+    Callback = function(key)
+        if key then
+            local keyMap = {
+                ["Q"] = Enum.KeyCode.Q, ["W"] = Enum.KeyCode.W, ["E"] = Enum.KeyCode.E,
+                ["R"] = Enum.KeyCode.R, ["T"] = Enum.KeyCode.T, ["Y"] = Enum.KeyCode.Y,
+                ["U"] = Enum.KeyCode.U, ["I"] = Enum.KeyCode.I, ["O"] = Enum.KeyCode.O,
+                ["P"] = Enum.KeyCode.P, ["A"] = Enum.KeyCode.A, ["S"] = Enum.KeyCode.S,
+                ["D"] = Enum.KeyCode.D, ["F"] = Enum.KeyCode.F, ["G"] = Enum.KeyCode.G,
+                ["H"] = Enum.KeyCode.H, ["J"] = Enum.KeyCode.J, ["K"] = Enum.KeyCode.K,
+                ["L"] = Enum.KeyCode.L, ["Z"] = Enum.KeyCode.Z, ["X"] = Enum.KeyCode.X,
+                ["C"] = Enum.KeyCode.C, ["V"] = Enum.KeyCode.V, ["B"] = Enum.KeyCode.B,
+                ["N"] = Enum.KeyCode.N, ["M"] = Enum.KeyCode.M
+            }
+            AimTPKey = keyMap[key] or Enum.KeyCode.X
+            AimTPKeyLabel:Set("현재 키: " .. key)
+            Rayfield:Notify({ Title = "키 변경", Content = "에임 TP: " .. key, Duration = 2 })
+        end
+    end,
+})
+
+-- 에임 TP 토글
+MiscTab:CreateToggle({
+    Name = "에임 텔레포트 ON/OFF",
+    CurrentValue = false,
+    Flag = "AimTP",
+    Callback = function(state)
+        AimTPEnabled = state
+        
+        if AimTPEnabled then
+            if AimTPConnection then
+                AimTPConnection:Disconnect()
+            end
+            
+            AimTPConnection = UserInput.InputBegan:Connect(function(input, isTyping)
+                if not isTyping and input.KeyCode == AimTPKey then
+                    SafeCall(function()
+                        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                            local mousePos = Mouse.Hit.Position
+                            LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(
+                                mousePos.X,
+                                mousePos.Y + 3,
+                                mousePos.Z
+                            )
+                            
+                            CreateEffect(mousePos, "Bright red", Vector3.new(2, 2, 2))
+                            
+                            Rayfield:Notify({
+                                Title = "에임 TP",
+                                Content = "마우스 위치로 이동",
+                                Duration = 1
+                            })
+                        end
+                    end)
+                end
+            end)
+            
+            Rayfield:Notify({
+                Title = "에임 TP",
+                Content = "활성화됨 (" .. AimTPKey.Name .. "키)",
+                Duration = 2
+            })
+        else
+            if AimTPConnection then
+                AimTPConnection:Disconnect()
+                AimTPConnection = nil
+            end
+            Rayfield:Notify({ Title = "에임 TP", Content = "비활성화됨", Duration = 2 })
+        end
+    end,
+})
+
+-- 기타 기능들
+local MiscSection = MiscTab:CreateSection("기타 기능")
+
+MiscTab:CreateButton({
+    Name = "❌ UI 완전 종료",
+    Callback = function()
+        Rayfield:Destroy()
+    end,
+})
+
+MiscTab:CreateButton({
+    Name = "💀 캐릭터 리셋 (죽이기)",
+    Callback = function()
+        SafeCall(function()
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                LocalPlayer.Character.Humanoid.Health = 0
+                Rayfield:Notify({ Title = "리셋", Content = "캐릭터 사망", Duration = 2 })
+            end
+        end)
+    end,
+})
+
+MiscTab:CreateButton({
+    Name = "⚡ FPS 부스트",
+    Callback = function()
+        SafeCall(function()
+            settings().Rendering.QualityLevel = 1
+            RunService:Set3dRenderingEnabled(false)
+            task.wait(0.1)
+            RunService:Set3dRenderingEnabled(true)
+            Rayfield:Notify({ Title = "FPS", Content = "부스트 적용됨", Duration = 2 })
+        end)
+    end,
+})
+
+-- 캐릭터 리스폰 처리
+LocalPlayer.CharacterAdded:Connect(function(character)
+    -- 속도 적용
+    task.wait(0.5)
+    SafeCall(function()
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = WalkSpeed
+            humanoid.JumpPower = JumpPower
+        end
+    end)
+    
+    -- 프리즈 상태 처리
+    if FreezeEnabled then
+        Rayfield:Notify({
+            Title = "프리즈",
+            Content = "캐릭터가 리스폰됨. 프리즈를 다시 켜주세요.",
+            Duration = 3
+        })
+    end
+    
+    -- 플라이 상태 처리
+    if FlyEnabled then
+        Rayfield:Notify({
+            Title = "플라이",
+            Content = "캐릭터가 리스폰됨. 플라이를 다시 켜주세요.",
+            Duration = 3
+        })
+    end
+end)
+
+-- 시작 완료 알림
+Rayfield:Notify({
+    Title = "✨ 유니버스 로드 완료",
+    Content = "모든 기능이 준비되었습니다",
+    Duration = 3
+})
