@@ -1,13 +1,29 @@
--- Rayfield UI 로드
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+--[[
+    ⚠️ 경고: 교육 목적으로만 제공됩니다.
+    Roblox 이용약관을 위반하며 계정 제재 위험이 있습니다.
+]]
+
+-- Rayfield UI 로드 (안정적인 버전)
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source'))()
 
 -- Dong Hub 창 생성
 local Window = Rayfield:CreateWindow({
-    Name = "🐉 Dong Hub v1.0",
+    Name = "🐉 Dong Hub v2.0",
     LoadingTitle = "Dong Hub 로딩중...",
     LoadingSubtitle = "Z 텔레포트 | 벽뚫기 | 보호",
-    ConfigurationSaving = { Enabled = false },
+    ConfigurationSaving = {
+        Enabled = false
+    },
     KeySystem = false,
+    KeySettings = {
+        Title = "Dong Hub",
+        Subtitle = "키 시스템",
+        Note = "키가 없으면 Discord 문의",
+        FileName = "DongHubKey",
+        SaveKey = false,
+        GrabKeyFromSite = false,
+        Key = {"DongHub2024"}
+    },
     ToggleUIKeybind = "K"
 })
 
@@ -22,6 +38,7 @@ local player = game.Players.LocalPlayer
 local mouse = player:GetMouse()
 local userInputService = game:GetService("UserInputService")
 local runService = game:GetService("RunService")
+local tweenService = game:GetService("TweenService")
 
 -- 상태 변수
 local isGrabbed = false
@@ -31,55 +48,98 @@ local antiGrabEnabled = false
 local zTeleportEnabled = false
 local noclipEnabled = false
 local noclipConnection = nil
+local teleportCooldown = false
+
+-- 캐릭터 로드 대기
+repeat wait() until player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 
 -------------------------------------------------------------
 -- [메인 탭 - Z 텔레포트]
 -------------------------------------------------------------
 local TeleportSection = MainTab:CreateSection("🌀 Z 텔레포트")
 
--- 마우스 위치의 3D 좌표 얻기
+-- 마우스 위치의 3D 좌표 얻기 (개선됨)
 local function getMouseTarget()
     local unitRay = mouse.UnitRay
     local origin = unitRay.Origin
     local direction = unitRay.Direction * 1000
     
+    -- 파라미터 설정
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Blacklist
-    params.FilterDescendantsInstances = {player.Character}
+    params.FilterDescendantsInstances = {player.Character, workspace:FindFirstChild("Camera")}
     
+    -- 레이캐스트 실행
     local result = workspace:Raycast(origin, direction, params)
     
     if result then
-        return result.Position + result.Normal * 3 -- 약간 앞으로
+        -- 벽이나 바닥에 닿으면 그 위치로
+        return result.Position + result.Normal * 2
     else
-        return origin + direction
+        -- 아무것도 없으면 카메라가 바라보는 방향으로 50스터드 앞
+        return origin + direction.Unit * 50
     end
+end
+
+-- 안전한 텔레포트 함수
+local function safeTeleport(position)
+    if not player.Character then return false end
+    
+    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    
+    -- 텔레포트 전 충돌 임시 비활성화
+    local originalCollision = {}
+    for _, part in ipairs(player.Character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            originalCollision[part] = part.CanCollide
+            part.CanCollide = false
+        end
+    end
+    
+    -- 텔레포트
+    hrp.CFrame = CFrame.new(position)
+    
+    -- 약간의 지연 후 충돌 복구
+    task.wait(0.1)
+    for part, canCollide in pairs(originalCollision) do
+        if part and part.Parent then
+            part.CanCollide = canCollide
+        end
+    end
+    
+    return true
 end
 
 -- Z키 입력 처리
 userInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if not zTeleportEnabled or isPaused then return end
+    if teleportCooldown then return end
     if not player.Character then return end
     
     if input.KeyCode == Enum.KeyCode.Z then
+        teleportCooldown = true
+        
         -- Z키 눌렀을 때 순간이동
         local targetPos = getMouseTarget()
-        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+        local success = safeTeleport(targetPos)
         
-        if hrp then
-            hrp.CFrame = CFrame.new(targetPos)
-            
-            -- 효과 (선택사항)
+        if success then
+            -- 효과
             local highlight = Instance.new("Highlight")
-            highlight.Parent = workspace
+            highlight.Parent = player.Character
             highlight.Adornee = player.Character
             highlight.FillColor = Color3.fromRGB(0, 255, 255)
-            highlight.FillTransparency = 0.3
+            highlight.FillTransparency = 0.5
             highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
             
             game:GetService("Debris"):AddItem(highlight, 0.5)
         end
+        
+        -- 0.3초 쿨다운
+        task.wait(0.3)
+        teleportCooldown = false
     end
 end)
 
@@ -87,6 +147,7 @@ end)
 MainTab:CreateToggle({
     Name = "🌀 Z 텔레포트",
     CurrentValue = false,
+    Flag = "ZTeleportToggle",
     Callback = function(Value)
         zTeleportEnabled = Value
         
@@ -96,65 +157,64 @@ MainTab:CreateToggle({
                 Content = "Z 키를 눌러 마우스 위치로 순간이동",
                 Duration = 3
             })
-        else
-            Rayfield:Notify({
-                Title = "⛔ Z 텔레포트 OFF",
-                Content = "기능 비활성화",
-                Duration = 2
-            })
         end
     end
 })
 
 -- 텔레포트 테스트 버튼
 MainTab:CreateButton({
-    Name = "🎯 즉시 텔레포트 (테스트)",
+    Name = "🎯 즉시 텔레포트",
     Callback = function()
         if isPaused then
             Rayfield:Notify({
                 Title = "⛔ 일시정지 상태",
-                Content = "보호 기능 해제 대기 중입니다",
+                Content = "보호 기능 해제 대기 중",
                 Duration = 2
             })
             return
         end
         
         local targetPos = getMouseTarget()
-        local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        
-        if hrp then
-            hrp.CFrame = CFrame.new(targetPos)
-        end
+        safeTeleport(targetPos)
     end
 })
 
 -------------------------------------------------------------
 -- [메인 탭 - 벽뚫기 (Noclip)]
 -------------------------------------------------------------
-local NoclipSection = MainTab:CreateSection("🧱 벽뚫기"
+local NoclipSection = MainTab:CreateSection("🧱 벽뚫기")
 
--- 벽뚫기 함수
+-- 벽뚫기 함수 (개선됨)
 local function enableNoclip(enable)
     if enable then
-        -- Noclip 활성화
+        -- 기존 연결 제거
         if noclipConnection then
             noclipConnection:Disconnect()
         end
         
+        -- Noclip 루프
         noclipConnection = runService.Stepped:Connect(function()
+            if not antiGrabEnabled and isPaused then return end
             if not player.Character then return end
-            if isPaused then return end
             
+            -- 바닥을 제외한 모든 파트 CanCollide = false
             for _, part in ipairs(player.Character:GetDescendants()) do
-                if part:IsA("BasePart") then
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    -- HumanoidRootPart는 약간의 충돌 유지 (안정성)
                     part.CanCollide = false
                 end
+            end
+            
+            -- HumanoidRootPart는 약간의 충돌 유지 (안정성)
+            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.CanCollide = true
             end
         end)
         
         Rayfield:Notify({
             Title = "✅ 벽뚫기 ON",
-            Content = "모든 벽/오브젝트 통과 가능 (바닥 제외)",
+            Content = "벽/오브젝트 통과 가능 (바닥 제외)",
             Duration = 3
         })
     else
@@ -164,7 +224,7 @@ local function enableNoclip(enable)
             noclipConnection = nil
         end
         
-        -- 원래대로 복구
+        -- 충돌 복구
         if player.Character then
             for _, part in ipairs(player.Character:GetDescendants()) do
                 if part:IsA("BasePart") then
@@ -183,8 +243,9 @@ end
 
 -- 벽뚫기 토글
 MainTab:CreateToggle({
-    Name = "🧱 벽뚫기 (바닥 제외)",
+    Name = "🧱 벽뚫기",
     CurrentValue = false,
+    Flag = "NoclipToggle",
     Callback = function(Value)
         noclipEnabled = Value
         enableNoclip(Value)
@@ -194,65 +255,50 @@ MainTab:CreateToggle({
 -- 벽뚫기 설명
 MainTab:CreateParagraph({
     Title = "📌 벽뚫기 정보",
-    Content = "• 바닥은 통과할 수 없습니다\n• 모든 벽/오브젝트 통과 가능\n• 보호 일시정지 중에는 비활성화"
+    Content = "• 바닥 제외 모든 벽/오브젝트 통과\n• 머리 부분은 안정성 유지\n• 보호 일시정지 중 비활성화"
 })
 
 -------------------------------------------------------------
 -- [보호 탭 - 안티그랩 (5초 자동 점프)]
 -------------------------------------------------------------
-local AntiGrabSection = ProtectTab:CreateSection("🛡️ 안티그랩"
+local AntiGrabSection = ProtectTab:CreateSection("🛡️ 안티그랩")
 
--- 잡힘 감지 함수
+-- 잡힘 감지 함수 (개선됨)
 local function checkIfGrabbed()
     if not antiGrabEnabled or isPaused then return false end
     if not player.Character then return false end
     
     local character = player.Character
     
-    -- Constraint(로프, 스프링) 감지
+    -- Constraint 감지
     for _, constraint in ipairs(character:GetDescendants()) do
-        if constraint:IsA("Constraint") then
-            if constraint:IsA("RopeConstraint") or constraint:IsA("SpringConstraint") or constraint:IsA("RodConstraint") then
-                local attachments = {constraint.Attachment0, constraint.Attachment1}
-                
-                for _, att in ipairs(attachments) do
-                    if att and att.Parent then
-                        local parentPart = att.Parent
-                        if parentPart.Parent and parentPart.Parent:IsA("Model") then
-                            local char = parentPart.Parent
-                            if char:FindFirstChild("Humanoid") then
-                                local otherPlayer = game.Players:GetPlayerFromCharacter(char)
-                                if otherPlayer and otherPlayer ~= player then
-                                    return true, constraint, otherPlayer
-                                end
-                            end
-                        end
-                    end
-                end
-            end
+        if constraint:IsA("RopeConstraint") or constraint:IsA("SpringConstraint") or constraint:IsA("RodConstraint") then
+            return true, constraint
         end
     end
     
-    -- Weld/Joint 감지
+    -- Weld 감지 (다른 플레이어와 연결)
     for _, weld in ipairs(character:GetDescendants()) do
         if weld:IsA("Weld") or weld:IsA("Snap") or weld:IsA("Motor6D") then
             if weld.Part0 and weld.Part1 then
                 local part0Parent = weld.Part0.Parent
                 local part1Parent = weld.Part1.Parent
                 
-                if part0Parent and part1Parent then
+                if part0Parent and part1Parent and part0Parent ~= part1Parent then
                     if (part0Parent:IsA("Model") and part0Parent:FindFirstChild("Humanoid")) or
                        (part1Parent:IsA("Model") and part1Parent:FindFirstChild("Humanoid")) then
-                        
-                        local player0 = part0Parent:IsA("Model") and game.Players:GetPlayerFromCharacter(part0Parent)
-                        local player1 = part1Parent:IsA("Model") and game.Players:GetPlayerFromCharacter(part1Parent)
-                        
-                        if (player0 == player and player1 and player1 ~= player) or
-                           (player1 == player and player0 and player0 ~= player) then
-                            return true, weld, (player0 == player and player1 or player0)
-                        end
+                        return true, weld
                     end
                 end
+            end
+        end
+    end
+    
+    -- BodyMover 감지
+    for _, bodyMove in ipairs(character:GetDescendants()) do
+        if bodyMove:IsA("BodyPosition") or bodyMove:IsA("BodyVelocity") then
+            if bodyMove.Parent ~= character then
+                return true, bodyMove
             end
         end
     end
@@ -260,45 +306,42 @@ local function checkIfGrabbed()
     return false
 end
 
--- 잡힘 해제 함수
+-- 잡힘 해제 함수 (개선됨)
 local function releaseFromGrab()
     if not player.Character then return end
     
     local character = player.Character
     
-    -- 모든 Constraint 제거
+    -- Constraint 제거
     for _, constraint in ipairs(character:GetDescendants()) do
         if constraint:IsA("Constraint") then
             pcall(function() constraint:Destroy() end)
         end
     end
     
-    -- 모든 Weld/Joint 제거
+    -- Weld/Joint 제거
     for _, weld in ipairs(character:GetDescendants()) do
         if weld:IsA("Weld") or weld:IsA("Snap") or weld:IsA("Motor6D") then
-            if weld.Part0 and weld.Part1 then
-                local part0Parent = weld.Part0.Parent
-                local part1Parent = weld.Part1.Parent
-                
-                if part0Parent and part1Parent then
-                    if (part0Parent:IsA("Model") and part0Parent:FindFirstChild("Humanoid")) or
-                       (part1Parent:IsA("Model") and part1Parent:FindFirstChild("Humanoid")) then
-                        pcall(function() weld:Destroy() end)
-                    end
-                end
-            end
+            pcall(function() weld:Destroy() end)
+        end
+    end
+    
+    -- BodyMover 제거
+    for _, bodyMove in ipairs(character:GetDescendants()) do
+        if bodyMove:IsA("BodyPosition") or bodyMove:IsA("BodyVelocity") then
+            pcall(function() bodyMove:Destroy() end)
         end
     end
 end
 
--- 5초 점프 시스템
+-- 5초 점프 시스템 (개선됨)
 local function startJumpRelease()
     isGrabbed = true
     grabTimer = 5
     
     Rayfield:Notify({
         Title = "⚠️ 잡힘 감지!",
-        Content = "5초 후 자동 점프로 해제합니다",
+        Content = "5초 후 자동 점프 시작",
         Duration = 3
     })
     
@@ -308,14 +351,15 @@ local function startJumpRelease()
         
         grabTimer = i
         
-        -- 매초 점프
+        -- 점프
         if player.Character and player.Character:FindFirstChild("Humanoid") then
             local humanoid = player.Character.Humanoid
             humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
             
+            -- 위로 힘 가하기
             local hrp = player.Character:FindFirstChild("HumanoidRootPart")
             if hrp then
-                hrp.Velocity = hrp.Velocity + Vector3.new(0, 50, 0)
+                hrp.Velocity = Vector3.new(hrp.Velocity.X, 50, hrp.Velocity.Z)
             end
         end
         
@@ -328,7 +372,7 @@ local function startJumpRelease()
         
         Rayfield:Notify({
             Title = "✅ 강제 해제",
-            Content = "5초 점프로 잡힘 상태 해제됨",
+            Content = "5초 점프 완료",
             Duration = 2
         })
         
@@ -341,18 +385,18 @@ local function startJumpRelease()
             enableNoclip(false)
         end
         
-        -- 5초 후 일시정지 해제
+        -- 5초 대기
         task.wait(5)
         isPaused = false
         
-        -- 벽뚫기 다시 활성화
+        -- 벽뚫기 재활성화
         if noclipEnabled then
             enableNoclip(true)
         end
         
         Rayfield:Notify({
             Title = "▶️ 기능 재개",
-            Content = "모든 기능이 다시 활성화됩니다",
+            Content = "모든 기능 활성화",
             Duration = 2
         })
     end
@@ -362,7 +406,7 @@ end
 local function startDetection()
     spawn(function()
         while antiGrabEnabled do
-            task.wait(0.5)
+            task.wait(0.3)
             
             if isPaused then continue end
             
@@ -376,13 +420,12 @@ local function startDetection()
                 
                 Rayfield:Notify({
                     Title = "🔓 잡힘 해제",
-                    Content = "5초 대기 후 기능 재개",
+                    Content = "5초 후 기능 재개",
                     Duration = 2
                 })
                 
                 isPaused = true
                 
-                -- 벽뚫기 일시 중지
                 if noclipEnabled then
                     enableNoclip(false)
                 end
@@ -390,14 +433,13 @@ local function startDetection()
                 task.wait(5)
                 isPaused = false
                 
-                -- 벽뚫기 다시 활성화
                 if noclipEnabled then
                     enableNoclip(true)
                 end
                 
                 Rayfield:Notify({
                     Title = "▶️ 기능 재개",
-                    Content = "모든 기능이 다시 활성화됩니다",
+                    Content = "모든 기능 활성화",
                     Duration = 2
                 })
             end
@@ -405,10 +447,11 @@ local function startDetection()
     end)
 end
 
--- 안티그랩 토글 (보호 탭의 첫 번째 기능)
+-- 안티그랩 토글
 local antiGrabToggle = ProtectTab:CreateToggle({
     Name = "🛡️ 안티그랩 (5초 점프)",
     CurrentValue = false,
+    Flag = "AntiGrabToggle",
     Callback = function(Value)
         antiGrabEnabled = Value
         
@@ -416,7 +459,7 @@ local antiGrabToggle = ProtectTab:CreateToggle({
             startDetection()
             Rayfield:Notify({
                 Title = "✅ 안티그랩 ON",
-                Content = "잡힘 감지 및 5초 자동 점프",
+                Content = "잡힘 감지 및 5초 점프",
                 Duration = 3
             })
         else
@@ -439,7 +482,6 @@ ProtectTab:CreateButton({
         isGrabbed = false
         isPaused = true
         
-        -- 벽뚫기 일시 중지
         if noclipEnabled then
             enableNoclip(false)
         end
@@ -453,7 +495,6 @@ ProtectTab:CreateButton({
         task.wait(5)
         isPaused = false
         
-        -- 벽뚫기 다시 활성화
         if noclipEnabled then
             enableNoclip(true)
         end
@@ -463,38 +504,47 @@ ProtectTab:CreateButton({
 -- 보호 상태 표시
 ProtectTab:CreateParagraph({
     Title = "📊 보호 상태",
-    Content = "• 안티그랩: 5초 자동 점프\n• 잡힘 해제 시 5초 일시정지\n• 벽뚫기와 연동됨"
+    Content = "• 안티그랩: 5초 자동 점프\n• 잡힘 해제 시 5초 일시정지\n• 벽뚫기와 연동"
 })
 
 -------------------------------------------------------------
--- [메인 탭 - 반짝이 찾기 (추가 기능)]
+-- [메인 탭 - 반짝이 찾기]
 -------------------------------------------------------------
 local ShinySection = MainTab:CreateSection("✨ 반짝이 찾기")
 
 -- 반짝이 탐지 함수
 local function findShinyObjects()
     local found = {}
+    local count = 0
     
     for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
+        if obj:IsA("BasePart") and obj.Transparency < 0.5 then
+            -- 반짝이는 재질 체크
             local shinyMaterials = {
                 [Enum.Material.Neon] = true,
                 [Enum.Material.DiamondPlate] = true,
                 [Enum.Material.Foil] = true,
                 [Enum.Material.Glass] = true,
-                [Enum.Material.Glacier] = true
+                [Enum.Material.Glacier] = true,
+                [Enum.Material.Plastic] = true,
+                [Enum.Material.SmoothPlastic] = true
             }
             
-            if shinyMaterials[obj.Material] or obj.Reflectance > 0.3 then
+            if shinyMaterials[obj.Material] or obj.Reflectance > 0.2 then
                 table.insert(found, obj)
+                count = count + 1
                 
-                local highlight = Instance.new("Highlight")
-                highlight.Parent = obj
-                highlight.Adornee = obj
-                highlight.FillColor = Color3.fromRGB(255, 255, 0)
-                highlight.FillTransparency = 0.3
-                
-                game:GetService("Debris"):AddItem(highlight, 3)
+                -- 하이라이트 (너무 많으면 생략)
+                if count < 20 then
+                    local highlight = Instance.new("Highlight")
+                    highlight.Parent = obj
+                    highlight.Adornee = obj
+                    highlight.FillColor = Color3.fromRGB(255, 255, 0)
+                    highlight.FillTransparency = 0.5
+                    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    
+                    game:GetService("Debris"):AddItem(highlight, 3)
+                end
             end
         end
     end
@@ -515,8 +565,9 @@ MainTab:CreateButton({
 })
 
 -- 초기 알림
+task.wait(1)
 Rayfield:Notify({
     Title = "🐉 Dong Hub 로드 완료",
-    Content = "Z:텔레포트 | 벽뚫기 | 안티그랩",
+    Content = "K:UI 토글 | Z:텔레포트 | 벽뚫기 | 안티그랩",
     Duration = 5
 })
