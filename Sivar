@@ -1,7 +1,7 @@
 --[[
     유니버스 (Universe) - 얼티메이트 에디션
     - 섬세한 플레이어 텔레포트
-    - 보안 탭 추가
+    - 보안 탭 + Anti-Grab 기능
     - 에임 TP 이펙트 제거
 ]]
 
@@ -20,6 +20,7 @@ local Stats = game:GetService("Stats")
 local NetworkClient = game:GetService("NetworkClient")
 local HttpService = game:GetService("HttpService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- 로컬 플레이어
 local LocalPlayer = Players.LocalPlayer
@@ -54,10 +55,6 @@ end
 local function SafeCall(func, ...)
     local success, result = pcall(func, ...)
     return result
-end
-
-local function CreateEffect(position, color, size)
-    -- 이펙트 생성 (에임 TP에서는 사용 안함)
 end
 
 --============================================================================--
@@ -734,14 +731,14 @@ local function DelicateTeleportToPlayer(target)
         Duration = 2
     })
     
-    -- 0.3초 카운트다운 (3회) - 더 섬세하게
+    -- 0.3초 카운트다운 (3회)
     for i = 1, 3 do
         local remaining = (4 - i) / 10
         local progress = string.rep("■", i) .. string.rep("□", 3 - i)
         StatusLabel:Set(string.format("⏳ 상태: %s %.1f초", progress, remaining))
         
-        -- 부드러운 화면 흔들림 (거리에 비례)
-        local shakeIntensity = math.min(distance / 100, 2)  -- 최대 2 studs
+        -- 부드러운 화면 흔들림
+        local shakeIntensity = math.min(distance / 100, 2)
         SafeCall(function()
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                 local root = LocalPlayer.Character.HumanoidRootPart
@@ -764,29 +761,29 @@ local function DelicateTeleportToPlayer(target)
         return
     end
     
-    -- 정확한 위치 계산 (대상의 발 위치 기준)
+    -- 정확한 위치 계산
     local targetCF = target.Character.HumanoidRootPart.CFrame
-    local targetVelocity = target.Character.HumanoidRootPart.Velocity  -- 대상의 이동 속도 고려
+    local targetVelocity = target.Character.HumanoidRootPart.Velocity
     
     -- 대상이 이동 중이면 약간 앞쪽에 텔레포트
     local predictionOffset = Vector3.new()
     if targetVelocity.Magnitude > 5 then
-        predictionOffset = targetVelocity.Unit * 3  -- 3 studs 예측
+        predictionOffset = targetVelocity.Unit * 3
     end
     
-    -- 텔레포트 실행 (대상의 뒤쪽 약간 위에 착지)
+    -- 텔레포트 실행
     local finalPosition = targetCF + Vector3.new(0, 5, 0) + predictionOffset
     
     SafeCall(function()
         LocalPlayer.Character.HumanoidRootPart.CFrame = finalPosition
         
-        -- 착지 시 약간의 높이 조정 (지면 체크)
+        -- 착지 시 지면 체크
         task.wait(0.05)
         if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
             local ray = Ray.new(finalPosition.Position + Vector3.new(0, 10, 0), Vector3.new(0, -20, 0))
             local hit, pos = workspace:FindPartOnRay(ray, LocalPlayer.Character)
             if hit and pos then
-                local groundY = pos.Y + 3  -- 지면 위 3 studs
+                local groundY = pos.Y + 3
                 if finalPosition.Y > groundY + 5 then
                     LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(finalPosition.X, groundY, finalPosition.Z)
                 end
@@ -1001,8 +998,6 @@ MiscTab:CreateToggle({
                                 mousePos.Z
                             )
                             
-                            -- 이펙트 제거됨
-                            
                             Rayfield:Notify({
                                 Title = "에임 TP",
                                 Content = "마우스 위치로 이동",
@@ -1029,7 +1024,7 @@ MiscTab:CreateToggle({
 })
 
 --============================================================================--
--- 보안 탭 (새로 추가)
+-- 보안 탭 (Anti-Grab 포함)
 --============================================================================--
 local SecurityTab = Window:CreateTab("보안", 4483362458)
 local SecuritySection = SecurityTab:CreateSection("🔒 계정 보안")
@@ -1039,7 +1034,7 @@ local AccountInfoLabel = SecurityTab:CreateLabel("계정: " .. LocalPlayer.Name)
 local UserIdLabel = SecurityTab:CreateLabel("User ID: " .. LocalPlayer.UserId)
 local DisplayNameLabel = SecurityTab:CreateLabel("표시 이름: " .. LocalPlayer.DisplayName)
 
--- 계정 생성일 (근사치)
+-- 계정 생성일
 local function GetAccountAge()
     local age = LocalPlayer.AccountAge
     local days = math.floor(age)
@@ -1058,10 +1053,12 @@ end
 
 local FriendCountLabel = SecurityTab:CreateLabel("친구 수: " .. GetFriendCount())
 
--- 보안 설정 섹션
+--============================================================================--
+-- 보안 설정 섹션 (Anti-Grab 포함)
+--============================================================================--
 local SecuritySettingsSection = SecurityTab:CreateSection("⚙️ 보안 설정")
 
--- Anti-Afk (자리비움 방지)
+-- Anti-Afk
 local AntiAfkEnabled = false
 local AntiAfkConnection = nil
 
@@ -1073,13 +1070,11 @@ SecurityTab:CreateToggle({
         AntiAfkEnabled = state
         
         if AntiAfkEnabled then
-            -- VirtualUser로 AFK 방지
             LocalPlayer.Idled:Connect(function()
                 VirtualUser:CaptureController()
                 VirtualUser:ClickButton2(Vector2.new())
             end)
             
-            -- 주기적으로 움직임 시뮬레이션
             AntiAfkConnection = RunService.Stepped:Connect(function()
                 if AntiAfkEnabled then
                     VirtualUser:CaptureController()
@@ -1098,23 +1093,137 @@ SecurityTab:CreateToggle({
     end,
 })
 
--- 로그아웃 방지 (경고만)
+--============================================================================--
+-- 🔥 Anti-Grab (잡기 방지) - 요청하신 기능
+--============================================================================--
+local AntiGrabSection = SecurityTab:CreateSection("🛡️ Anti-Grab (잡기 방지)")
+
+-- ReplicatedStorage에서 필요한 원격 이벤트 가져오기
+local rs = ReplicatedStorage
+local plr = LocalPlayer
+
+-- Anti-Grab 변수
+local AntiGrabEnabled = false
+local AntiGrabConnection = nil
+local Inventory = nil
+
+-- 인벤토리 찾기 함수 (플레이어 이름 기반)
+local function FindInventory()
+    -- "플레이어이름SpawnedInToys" 패턴으로 찾기
+    local inventoryName = plr.Name .. "SpawnedInToys"
+    return workspace:WaitForChild(inventoryName, 5)
+end
+
+-- Struggle과 Ragdoll 원격 이벤트 찾기
+local Struggle = rs:FindFirstChild("CharacterEvents") and rs.CharacterEvents:FindFirstChild("Struggle")
+local Ragdoll = rs:FindFirstChild("CharacterEvents") and rs.CharacterEvents:FindFirstChild("RagdollRemote")
+
+-- Anti-Grab 함수
+local function StartAntiGrab()
+    -- 필요한 것들이 모두 있는지 확인
+    if not Struggle or not Ragdoll then
+        Rayfield:Notify({
+            Title = "⚠️ Anti-Grab 오류",
+            Content = "Struggle 또는 Ragdoll 원격을 찾을 수 없음",
+            Duration = 3
+        })
+        return false
+    end
+    
+    -- 인벤토리 찾기
+    Inventory = FindInventory()
+    if not Inventory then
+        Rayfield:Notify({
+            Title = "⚠️ Anti-Grab 오류",
+            Content = "인벤토리를 찾을 수 없음",
+            Duration = 3
+        })
+        return false
+    end
+    
+    -- IsHeld 속성 확인
+    if not plr:FindFirstChild("IsHeld") then
+        Rayfield:Notify({
+            Title = "⚠️ Anti-Grab 오류",
+            Content = "IsHeld 속성을 찾을 수 없음",
+            Duration = 3
+        })
+        return false
+    end
+    
+    -- Anti-Grab 루프 시작
+    AntiGrabConnection = RunService.Heartbeat:Connect(function()
+        if not AntiGrabEnabled then return end
+        
+        SafeCall(function()
+            local char = plr.Character
+            if not char then return end
+            
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChild("Humanoid")
+            
+            if plr.IsHeld.Value and hrp and hum then
+                Struggle:FireServer()
+                Ragdoll:FireServer(hrp, 0)
+                hum.Sit = false
+            end
+        end)
+    end)
+    
+    return true
+end
+
+-- Anti-Grab 토글
 SecurityTab:CreateToggle({
-    Name = "⚠️ 로그아웃 방지 (실험적)",
+    Name = "🛡️ Anti-Grab (잡기 방지)",
     CurrentValue = false,
-    Flag = "LogoutProtect",
+    Flag = "AntiGrab",
     Callback = function(state)
-        if state then
-            Rayfield:Notify({
-                Title = "로그아웃 방지",
-                Content = "이 기능은 완전하지 않을 수 있습니다",
-                Duration = 3
-            })
+        AntiGrabEnabled = state
+        
+        if AntiGrabEnabled then
+            -- Anti-Grab 시작
+            local success = StartAntiGrab()
+            if success then
+                Rayfield:Notify({
+                    Title = "✅ Anti-Grab",
+                    Content = "활성화됨 - 잡히면 자동으로 풀림",
+                    Duration = 3
+                })
+            else
+                AntiGrabEnabled = false
+            end
+        else
+            -- Anti-Grab 중지
+            if AntiGrabConnection then
+                AntiGrabConnection:Disconnect()
+                AntiGrabConnection = nil
+            end
+            Rayfield:Notify({ Title = "Anti-Grab", Content = "비활성화됨", Duration = 2 })
         end
     end,
 })
 
+-- Anti-Grab 상태 표시
+local AntiGrabStatusLabel = SecurityTab:CreateLabel("Anti-Grab 상태: 꺼짐")
+local AntiGrabInfoLabel = SecurityTab:CreateLabel("정보: 잡히면 자동으로 Struggle 발동")
+
+RunService.Heartbeat:Connect(function()
+    AntiGrabStatusLabel:Set("Anti-Grab 상태: " .. (AntiGrabEnabled and "켜짐 ✅" or "꺼짐 ❌"))
+    
+    -- IsHeld 상태 표시 (디버깅용)
+    if AntiGrabEnabled and plr:FindFirstChild("IsHeld") then
+        if plr.IsHeld.Value then
+            AntiGrabInfoLabel:Set("⚠️ 현재 잡혀있음! - 자동으로 풀는 중...")
+        else
+            AntiGrabInfoLabel:Set("✅ 안전함 - 잡히지 않은 상태")
+        end
+    end
+end)
+
+--============================================================================--
 -- 세션 정보 섹션
+--============================================================================--
 local SessionSection = SecurityTab:CreateSection("📊 세션 정보")
 
 -- 핑 표시
@@ -1147,7 +1256,9 @@ Players.PlayerRemoving:Connect(function()
     PlayerCountLabel:Set("플레이어: " .. #Players:GetPlayers() .. "명")
 end)
 
+--============================================================================--
 -- 위험 경고 섹션
+--============================================================================--
 local WarningSection = SecurityTab:CreateSection("⚠️ 위험 경고")
 
 SecurityTab:CreateButton({
@@ -1155,17 +1266,15 @@ SecurityTab:CreateButton({
     Callback = function()
         local issues = {}
         
-        -- 관리자 감지 (의심스러운 플레이어)
+        -- 관리자 감지
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= LocalPlayer then
-                -- 의심스러운 이름 패턴
                 if string.match(player.Name:lower(), "admin") or 
                    string.match(player.Name:lower(), "mod") or
                    string.match(player.Name:lower(), "owner") then
                     table.insert(issues, "⚠️ 의심스러운 이름: " .. player.Name)
                 end
                 
-                -- 높은 랭크 의심
                 if player.UserId < 1000000 then
                     table.insert(issues, "🔴 올드 유저: " .. player.Name .. " (ID: " .. player.UserId .. ")")
                 end
