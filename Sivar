@@ -1,6 +1,8 @@
 --[[
-    유니버스 (Universe) - 섬세한 최종 버전
-    모든 기능이 완벽하게 작동하는 최적화된 스크립트
+    유니버스 (Universe) - 얼티메이트 에디션
+    - 섬세한 플레이어 텔레포트
+    - 보안 탭 추가
+    - 에임 TP 이펙트 제거
 ]]
 
 -- 서비스 로드
@@ -11,6 +13,13 @@ local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
+local VirtualUser = game:GetService("VirtualUser")
+local CoreGui = game:GetService("CoreGui")
+local GuiService = game:GetService("GuiService")
+local Stats = game:GetService("Stats")
+local NetworkClient = game:GetService("NetworkClient")
+local HttpService = game:GetService("HttpService")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 -- 로컬 플레이어
 local LocalPlayer = Players.LocalPlayer
@@ -22,7 +31,7 @@ local Mouse = LocalPlayer:GetMouse()
 local Window = Rayfield:CreateWindow({
     Name = "유니버스 (Universe)",
     LoadingTitle = "유니버스 로딩 중...",
-    LoadingSubtitle = "v2.0 - 얼티메이트 에디션",
+    LoadingSubtitle = "v3.0 - 시큐어 에디션",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "UniverseHub",
@@ -48,26 +57,7 @@ local function SafeCall(func, ...)
 end
 
 local function CreateEffect(position, color, size)
-    local effect = Instance.new("Part")
-    effect.Size = size or Vector3.new(3, 3, 3)
-    effect.Position = position
-    effect.BrickColor = BrickColor.new(color or "Bright blue")
-    effect.Material = Enum.Material.Neon
-    effect.Transparency = 0.3
-    effect.Anchored = true
-    effect.CanCollide = false
-    effect.Parent = workspace
-    Debris:AddItem(effect, 1)
-    
-    -- 서서히 사라지는 효과
-    task.spawn(function()
-        for i = 1, 10 do
-            effect.Transparency = effect.Transparency + 0.07
-            effect.Size = effect.Size + Vector3.new(0.3, 0.3, 0.3)
-            task.wait(0.03)
-        end
-        effect:Destroy()
-    end)
+    -- 이펙트 생성 (에임 TP에서는 사용 안함)
 end
 
 --============================================================================--
@@ -575,13 +565,15 @@ MainTab:CreateToggle({
 })
 
 --============================================================================--
--- 텔레포트 탭
+-- 텔레포트 탭 (섬세한 플레이어 텔레포트)
 --============================================================================--
 local TeleportTab = Window:CreateTab("텔레포트", 4483362458)
-local TeleportSection = TeleportTab:CreateSection("플레이어 텔레포트 (0.3초)")
+local TeleportSection = TeleportTab:CreateSection("🎯 섬세한 플레이어 텔레포트")
 
 local SelectedPlayer = nil
 local IsTeleporting = false
+local LastTeleportTime = 0
+local TeleportCooldown = 0.5  -- 0.5초 쿨다운
 
 -- 플레이어 목록 업데이트 함수
 local function GetPlayerList()
@@ -594,9 +586,29 @@ local function GetPlayerList()
     return list
 end
 
+-- 플레이어 상태 확인 함수
+local function GetPlayerStatus(player)
+    if not player then return "❌ 없음" end
+    if not player.Character then return "🔄 로딩중" end
+    if not player.Character:FindFirstChild("HumanoidRootPart") then return "⚠️ 준비중" end
+    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return "⚠️ 휴머노이드 없음" end
+    if humanoid.Health <= 0 then return "💀 사망" end
+    return "✅ 정상"
+end
+
+-- 거리 계산 함수
+local function GetDistanceToPlayer(player)
+    if not (player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and
+            LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")) then
+        return nil
+    end
+    return (LocalPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+end
+
 -- 플레이어 선택 드롭다운
 local PlayerDropdown = TeleportTab:CreateDropdown({
-    Name = "🎯 플레이어 선택",
+    Name = "👤 플레이어 선택",
     Options = GetPlayerList(),
     CurrentOption = {"선택하세요"},
     MultipleOptions = false,
@@ -607,10 +619,13 @@ local PlayerDropdown = TeleportTab:CreateDropdown({
             for _, player in ipairs(Players:GetPlayers()) do
                 if player.Name == selectedName then
                     SelectedPlayer = player
+                    local status = GetPlayerStatus(player)
+                    local dist = GetDistanceToPlayer(player)
+                    local distText = dist and string.format(" (%.1f studs)", dist) or ""
                     Rayfield:Notify({
-                        Title = "선택됨",
-                        Content = player.Name .. " (ID: " .. player.UserId .. ")",
-                        Duration = 2
+                        Title = "✅ 플레이어 선택됨",
+                        Content = string.format("%s | 상태: %s%s", player.Name, status, distText),
+                        Duration = 3
                     })
                     break
                 end
@@ -621,9 +636,46 @@ local PlayerDropdown = TeleportTab:CreateDropdown({
 
 -- 상태 표시 레이블
 local StatusLabel = TeleportTab:CreateLabel("⏳ 상태: 대기 중")
+local PlayerInfoLabel = TeleportTab:CreateLabel("선택된 플레이어: 없음")
+local DistanceLabel = TeleportTab:CreateLabel("거리: -")
+local CooldownLabel = TeleportTab:CreateLabel("쿨다운: 준비됨")
 
--- 텔레포트 함수
-local function TeleportToPlayer(target)
+-- 실시간 플레이어 정보 업데이트
+RunService.Heartbeat:Connect(function()
+    if SelectedPlayer then
+        local status = GetPlayerStatus(SelectedPlayer)
+        local dist = GetDistanceToPlayer(SelectedPlayer)
+        local distText = dist and string.format("%.1f studs", dist) or "알 수 없음"
+        PlayerInfoLabel:Set(string.format("선택됨: %s [%s]", SelectedPlayer.Name, status))
+        DistanceLabel:Set(string.format("거리: %s", distText))
+        
+        -- 쿨다운 표시
+        local timeSinceLast = tick() - LastTeleportTime
+        if timeSinceLast < TeleportCooldown then
+            CooldownLabel:Set(string.format("쿨다운: %.1f초", TeleportCooldown - timeSinceLast))
+        else
+            CooldownLabel:Set("쿨다운: 준비됨 ✅")
+        end
+    else
+        PlayerInfoLabel:Set("선택된 플레이어: 없음")
+        DistanceLabel:Set("거리: -")
+        CooldownLabel:Set("쿨다운: -")
+    end
+end)
+
+-- 섬세한 텔레포트 함수
+local function DelicateTeleportToPlayer(target)
+    -- 쿨다운 체크
+    local timeSinceLast = tick() - LastTeleportTime
+    if timeSinceLast < TeleportCooldown then
+        Rayfield:Notify({
+            Title = "⏳ 쿨다운",
+            Content = string.format("%.1f초 후에 다시 시도하세요", TeleportCooldown - timeSinceLast),
+            Duration = 2
+        })
+        return
+    end
+    
     if IsTeleporting then
         Rayfield:Notify({ Title = "경고", Content = "이미 텔레포트 중입니다", Duration = 2 })
         return
@@ -634,7 +686,7 @@ local function TeleportToPlayer(target)
         return
     end
     
-    -- 대상 확인
+    -- 대상 존재 확인
     local targetExists = false
     for _, p in ipairs(Players:GetPlayers()) do
         if p == target then
@@ -649,32 +701,54 @@ local function TeleportToPlayer(target)
         return
     end
     
-    if not (target.Character and target.Character:FindFirstChild("HumanoidRootPart")) then
-        Rayfield:Notify({ Title = "오류", Content = "대상의 캐릭터가 없습니다", Duration = 2 })
+    -- 대상 상태 확인
+    local targetStatus = GetPlayerStatus(target)
+    if targetStatus ~= "✅ 정상" then
+        Rayfield:Notify({
+            Title = "⚠️ 대상 상태 불량",
+            Content = string.format("상태: %s", targetStatus),
+            Duration = 3
+        })
         return
     end
     
+    -- 내 캐릭터 확인
     if not (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")) then
         Rayfield:Notify({ Title = "오류", Content = "내 캐릭터가 없습니다", Duration = 2 })
         return
     end
     
     IsTeleporting = true
+    LastTeleportTime = tick()
+    
+    -- 텔레포트 시작 알림
+    local startPos = LocalPlayer.Character.HumanoidRootPart.Position
+    local targetPos = target.Character.HumanoidRootPart.Position
+    local distance = (startPos - targetPos).Magnitude
+    
     StatusLabel:Set("⏳ 상태: 텔레포트 준비 중...")
     
-    -- 0.3초 카운트다운 (3회)
+    Rayfield:Notify({
+        Title = "🚀 텔레포트 시작",
+        Content = string.format("대상: %s | 거리: %.1f studs", target.Name, distance),
+        Duration = 2
+    })
+    
+    -- 0.3초 카운트다운 (3회) - 더 섬세하게
     for i = 1, 3 do
         local remaining = (4 - i) / 10
-        StatusLabel:Set("⏳ 상태: " .. string.format("%.1f", remaining) .. "초 후 이동")
+        local progress = string.rep("■", i) .. string.rep("□", 3 - i)
+        StatusLabel:Set(string.format("⏳ 상태: %s %.1f초", progress, remaining))
         
-        -- 화면 흔들림
+        -- 부드러운 화면 흔들림 (거리에 비례)
+        local shakeIntensity = math.min(distance / 100, 2)  -- 최대 2 studs
         SafeCall(function()
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                 local root = LocalPlayer.Character.HumanoidRootPart
                 root.CFrame = root.CFrame + Vector3.new(
-                    math.random(-15, 15) / 10,
-                    math.random(-15, 15) / 10,
-                    math.random(-15, 15) / 10
+                    math.random(-shakeIntensity * 10, shakeIntensity * 10) / 10,
+                    math.random(-shakeIntensity * 5, shakeIntensity * 5) / 10,
+                    math.random(-shakeIntensity * 10, shakeIntensity * 10) / 10
                 )
             end
         end)
@@ -682,16 +756,51 @@ local function TeleportToPlayer(target)
         task.wait(0.1)
     end
     
-    -- 텔레포트 실행
+    -- 텔레포트 실행 전 최종 확인
+    if not (target.Character and target.Character:FindFirstChild("HumanoidRootPart")) then
+        Rayfield:Notify({ Title = "오류", Content = "텔레포트 실패: 대상 캐릭터 소멸", Duration = 2 })
+        StatusLabel:Set("⏳ 상태: 대기 중")
+        IsTeleporting = false
+        return
+    end
+    
+    -- 정확한 위치 계산 (대상의 발 위치 기준)
+    local targetCF = target.Character.HumanoidRootPart.CFrame
+    local targetVelocity = target.Character.HumanoidRootPart.Velocity  -- 대상의 이동 속도 고려
+    
+    -- 대상이 이동 중이면 약간 앞쪽에 텔레포트
+    local predictionOffset = Vector3.new()
+    if targetVelocity.Magnitude > 5 then
+        predictionOffset = targetVelocity.Unit * 3  -- 3 studs 예측
+    end
+    
+    -- 텔레포트 실행 (대상의 뒤쪽 약간 위에 착지)
+    local finalPosition = targetCF + Vector3.new(0, 5, 0) + predictionOffset
+    
     SafeCall(function()
-        local targetCF = target.Character.HumanoidRootPart.CFrame
-        LocalPlayer.Character.HumanoidRootPart.CFrame = targetCF + Vector3.new(0, 5, 0)
-        CreateEffect(LocalPlayer.Character.HumanoidRootPart.Position, "Bright blue", Vector3.new(3, 3, 3))
+        LocalPlayer.Character.HumanoidRootPart.CFrame = finalPosition
+        
+        -- 착지 시 약간의 높이 조정 (지면 체크)
+        task.wait(0.05)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local ray = Ray.new(finalPosition.Position + Vector3.new(0, 10, 0), Vector3.new(0, -20, 0))
+            local hit, pos = workspace:FindPartOnRay(ray, LocalPlayer.Character)
+            if hit and pos then
+                local groundY = pos.Y + 3  -- 지면 위 3 studs
+                if finalPosition.Y > groundY + 5 then
+                    LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(finalPosition.X, groundY, finalPosition.Z)
+                end
+            end
+        end
     end)
+    
+    -- 텔레포트 완료 정보
+    local newPos = LocalPlayer.Character.HumanoidRootPart.Position
+    local newDistance = (newPos - targetPos).Magnitude
     
     Rayfield:Notify({
         Title = "✅ 텔레포트 완료",
-        Content = target.Name .. "님에게 이동했습니다",
+        Content = string.format("%s님에게 이동 | 도착 거리: %.1f studs", target.Name, newDistance),
         Duration = 3
     })
     
@@ -701,9 +810,9 @@ end
 
 -- 텔레포트 버튼
 TeleportTab:CreateButton({
-    Name = "🚀 선택한 플레이어에게 텔레포트",
+    Name = "🚀 섬세한 텔레포트",
     Callback = function()
-        TeleportToPlayer(SelectedPlayer)
+        DelicateTeleportToPlayer(SelectedPlayer)
     end,
 })
 
@@ -711,7 +820,7 @@ TeleportTab:CreateButton({
 UserInput.InputBegan:Connect(function(input, isTyping)
     if not isTyping and input.KeyCode == Enum.KeyCode.T then
         if SelectedPlayer then
-            TeleportToPlayer(SelectedPlayer)
+            DelicateTeleportToPlayer(SelectedPlayer)
         else
             Rayfield:Notify({ Title = "알림", Content = "먼저 플레이어를 선택하세요", Duration = 2 })
         end
@@ -736,6 +845,7 @@ TeleportTab:CreateButton({
             end
             if not stillExists then
                 SelectedPlayer = nil
+                Rayfield:Notify({ Title = "알림", Content = "이전 선택이 사라졌습니다", Duration = 2 })
             end
         end
         
@@ -747,30 +857,10 @@ TeleportTab:CreateButton({
     end,
 })
 
--- 선택 정보 표시
-local SelectedInfoLabel = TeleportTab:CreateLabel("선택된 플레이어: 없음")
-
-RunService.Heartbeat:Connect(function()
-    if SelectedPlayer then
-        SafeCall(function()
-            local info = "선택됨: " .. SelectedPlayer.Name
-            
-            if SelectedPlayer.Character and SelectedPlayer.Character:FindFirstChild("HumanoidRootPart") and
-               LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                local dist = (LocalPlayer.Character.HumanoidRootPart.Position - 
-                             SelectedPlayer.Character.HumanoidRootPart.Position).Magnitude
-                info = info .. string.format(" (%.1f studs)", dist)
-            end
-            
-            SelectedInfoLabel:Set(info)
-        end)
-    else
-        SelectedInfoLabel:Set("선택된 플레이어: 없음")
-    end
-end)
-
+--============================================================================--
 -- 일반 텔레포트
-local GeneralSection = TeleportTab:CreateSection("일반 위치 이동")
+--============================================================================--
+local GeneralSection = TeleportTab:CreateSection("📍 일반 위치 이동")
 
 local function FindSpawn()
     local spawns = {
@@ -852,7 +942,7 @@ MiscTab:CreateButton({
     end,
 })
 
--- 에임 텔레포트
+-- 에임 텔레포트 (이펙트 제거됨)
 local AimTPSection = MiscTab:CreateSection("에임 텔레포트")
 
 local AimTPEnabled = false
@@ -887,7 +977,7 @@ MiscTab:CreateKeybind({
     end,
 })
 
--- 에임 TP 토글
+-- 에임 TP 토글 (이펙트 제거)
 MiscTab:CreateToggle({
     Name = "에임 텔레포트 ON/OFF",
     CurrentValue = false,
@@ -911,7 +1001,7 @@ MiscTab:CreateToggle({
                                 mousePos.Z
                             )
                             
-                            CreateEffect(mousePos, "Bright red", Vector3.new(2, 2, 2))
+                            -- 이펙트 제거됨
                             
                             Rayfield:Notify({
                                 Title = "에임 TP",
@@ -938,7 +1028,176 @@ MiscTab:CreateToggle({
     end,
 })
 
+--============================================================================--
+-- 보안 탭 (새로 추가)
+--============================================================================--
+local SecurityTab = Window:CreateTab("보안", 4483362458)
+local SecuritySection = SecurityTab:CreateSection("🔒 계정 보안")
+
+-- 계정 정보 표시
+local AccountInfoLabel = SecurityTab:CreateLabel("계정: " .. LocalPlayer.Name)
+local UserIdLabel = SecurityTab:CreateLabel("User ID: " .. LocalPlayer.UserId)
+local DisplayNameLabel = SecurityTab:CreateLabel("표시 이름: " .. LocalPlayer.DisplayName)
+
+-- 계정 생성일 (근사치)
+local function GetAccountAge()
+    local age = LocalPlayer.AccountAge
+    local days = math.floor(age)
+    local years = math.floor(days / 365)
+    local months = math.floor((days % 365) / 30)
+    return string.format("%d일 (%d년 %d개월)", days, years, months)
+end
+
+local AccountAgeLabel = SecurityTab:CreateLabel("계정 나이: " .. GetAccountAge())
+
+-- 친구 수
+local function GetFriendCount()
+    local count = #LocalPlayer:GetFriends()
+    return tostring(count)
+end
+
+local FriendCountLabel = SecurityTab:CreateLabel("친구 수: " .. GetFriendCount())
+
+-- 보안 설정 섹션
+local SecuritySettingsSection = SecurityTab:CreateSection("⚙️ 보안 설정")
+
+-- Anti-Afk (자리비움 방지)
+local AntiAfkEnabled = false
+local AntiAfkConnection = nil
+
+SecurityTab:CreateToggle({
+    Name = "🛡️ Anti-AFK (자리비움 방지)",
+    CurrentValue = false,
+    Flag = "AntiAfk",
+    Callback = function(state)
+        AntiAfkEnabled = state
+        
+        if AntiAfkEnabled then
+            -- VirtualUser로 AFK 방지
+            LocalPlayer.Idled:Connect(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new())
+            end)
+            
+            -- 주기적으로 움직임 시뮬레이션
+            AntiAfkConnection = RunService.Stepped:Connect(function()
+                if AntiAfkEnabled then
+                    VirtualUser:CaptureController()
+                    VirtualUser:ClickButton2(Vector2.new())
+                end
+            end)
+            
+            Rayfield:Notify({ Title = "Anti-AFK", Content = "활성화됨", Duration = 2 })
+        else
+            if AntiAfkConnection then
+                AntiAfkConnection:Disconnect()
+                AntiAfkConnection = nil
+            end
+            Rayfield:Notify({ Title = "Anti-AFK", Content = "비활성화됨", Duration = 2 })
+        end
+    end,
+})
+
+-- 로그아웃 방지 (경고만)
+SecurityTab:CreateToggle({
+    Name = "⚠️ 로그아웃 방지 (실험적)",
+    CurrentValue = false,
+    Flag = "LogoutProtect",
+    Callback = function(state)
+        if state then
+            Rayfield:Notify({
+                Title = "로그아웃 방지",
+                Content = "이 기능은 완전하지 않을 수 있습니다",
+                Duration = 3
+            })
+        end
+    end,
+})
+
+-- 세션 정보 섹션
+local SessionSection = SecurityTab:CreateSection("📊 세션 정보")
+
+-- 핑 표시
+local PingLabel = SecurityTab:CreateLabel("핑: 측정중...")
+
+RunService.Heartbeat:Connect(function()
+    local ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+    PingLabel:Set("핑: " .. ping .. "ms")
+end)
+
+-- 메모리 사용량
+local MemoryLabel = SecurityTab:CreateLabel("메모리: 측정중...")
+
+RunService.Heartbeat:Connect(function()
+    local mem = math.floor(collectgarbage("count"))
+    MemoryLabel:Set("메모리: " .. mem .. "KB")
+end)
+
+-- 서버 정보
+local ServerInfoLabel = SecurityTab:CreateLabel("서버: " .. game.JobId)
+
+-- 플레이어 수
+local PlayerCountLabel = SecurityTab:CreateLabel("플레이어: " .. #Players:GetPlayers() .. "명")
+
+Players.PlayerAdded:Connect(function()
+    PlayerCountLabel:Set("플레이어: " .. #Players:GetPlayers() .. "명")
+end)
+
+Players.PlayerRemoving:Connect(function()
+    PlayerCountLabel:Set("플레이어: " .. #Players:GetPlayers() .. "명")
+end)
+
+-- 위험 경고 섹션
+local WarningSection = SecurityTab:CreateSection("⚠️ 위험 경고")
+
+SecurityTab:CreateButton({
+    Name = "🔍 세션 체크",
+    Callback = function()
+        local issues = {}
+        
+        -- 관리자 감지 (의심스러운 플레이어)
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                -- 의심스러운 이름 패턴
+                if string.match(player.Name:lower(), "admin") or 
+                   string.match(player.Name:lower(), "mod") or
+                   string.match(player.Name:lower(), "owner") then
+                    table.insert(issues, "⚠️ 의심스러운 이름: " .. player.Name)
+                end
+                
+                -- 높은 랭크 의심
+                if player.UserId < 1000000 then
+                    table.insert(issues, "🔴 올드 유저: " .. player.Name .. " (ID: " .. player.UserId .. ")")
+                end
+            end
+        end
+        
+        if #issues > 0 then
+            for _, issue in ipairs(issues) do
+                Rayfield:Notify({ Title = "경고", Content = issue, Duration = 3 })
+            end
+        else
+            Rayfield:Notify({ Title = "세션 체크", Content = "특이사항 없음", Duration = 2 })
+        end
+    end,
+})
+
+SecurityTab:CreateButton({
+    Name = "🚪 긴급 로그아웃",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "긴급 로그아웃",
+            Content = "3초 후 로그아웃합니다...",
+            Duration = 3
+        })
+        task.wait(3)
+        LocalPlayer:Kick("긴급 로그아웃 실행됨")
+    end,
+})
+
+--============================================================================--
 -- 기타 기능들
+--============================================================================--
 local MiscSection = MiscTab:CreateSection("기타 기능")
 
 MiscTab:CreateButton({
