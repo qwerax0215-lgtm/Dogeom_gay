@@ -19,7 +19,7 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false
 })
 
--- 메인 탭만 생성 (그외 탭 삭제)
+-- 메인 탭만 생성
 local MainTab = Window:CreateTab("메인", "home")
 
 ---------------------------------------------------------------------------
@@ -110,7 +110,7 @@ local function setupJump()
 end
 
 ---------------------------------------------------------------------------
--- 플라이핵 관련 변수 및 함수 (새로 추가)
+-- 플라이핵 관련 변수 및 함수
 ---------------------------------------------------------------------------
 local flyEnabled = false
 local flySpeed = 50
@@ -128,7 +128,6 @@ local function setupFly()
     if not humanoid or not rootPart then return end
     
     if flyEnabled then
-        -- 플라이 활성화
         humanoid.PlatformStand = true
         
         if flyBodyVelocity then
@@ -151,7 +150,6 @@ local function setupFly()
             local camera = workspace.CurrentCamera
             local uis = game:GetService("UserInputService")
             
-            -- WASD 이동
             if uis:IsKeyDown(Enum.KeyCode.W) then
                 moveDirection = moveDirection + camera.CFrame.LookVector
             end
@@ -164,8 +162,6 @@ local function setupFly()
             if uis:IsKeyDown(Enum.KeyCode.D) then
                 moveDirection = moveDirection + camera.CFrame.RightVector
             end
-            
-            -- 상하 이동 (스페이스/컨트롤)
             if uis:IsKeyDown(Enum.KeyCode.Space) then
                 moveDirection = moveDirection + Vector3.new(0, 1, 0)
             end
@@ -180,7 +176,6 @@ local function setupFly()
             flyBodyVelocity.Velocity = moveDirection
         end)
     else
-        -- 플라이 비활성화
         if flyBodyVelocity then
             flyBodyVelocity:Destroy()
             flyBodyVelocity = nil
@@ -196,15 +191,29 @@ local function setupFly()
 end
 
 ---------------------------------------------------------------------------
--- 벽뚫핵 관련 변수 및 함수 (메인탭으로 이동)
+-- 벽뚫핵 관련 변수 및 함수 (수정됨 - 변수 충돌 해결)
 ---------------------------------------------------------------------------
 local noclipEnabled = false
 local noclipConnection = nil
+local noclipParts = {}  -- 원래 CanCollide 값 저장용
 
 local function setupNoclip()
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    
     if noclipEnabled then
+        -- 벽뚫핵 켜기
         if noclipConnection then
             noclipConnection:Disconnect()
+        end
+        
+        -- 현재 파트들의 CanCollide 값 저장
+        if character then
+            for _, v in pairs(character:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    noclipParts[v] = v.CanCollide
+                end
+            end
         end
         
         noclipConnection = game:GetService("RunService").Stepped:Connect(function()
@@ -221,6 +230,7 @@ local function setupNoclip()
             end
         end)
     else
+        -- 벽뚫핵 끄기 - 저장된 값으로 복구
         if noclipConnection then
             noclipConnection:Disconnect()
             noclipConnection = nil
@@ -231,15 +241,23 @@ local function setupNoclip()
         if character then
             for _, v in pairs(character:GetDescendants()) do
                 if v:IsA("BasePart") then
-                    v.CanCollide = true
+                    -- 저장된 값이 있으면 그 값으로, 없으면 true로 복구
+                    if noclipParts[v] ~= nil then
+                        v.CanCollide = noclipParts[v]
+                    else
+                        v.CanCollide = true
+                    end
                 end
             end
         end
+        
+        -- 저장된 테이블 초기화
+        noclipParts = {}
     end
 end
 
 ---------------------------------------------------------------------------
--- 무한점프 관련 변수 및 함수 (메인탭으로 이동)
+-- 무한점프 관련 변수 및 함수
 ---------------------------------------------------------------------------
 local infiniteJumpEnabled = false
 local infiniteJumpConnection = nil
@@ -271,11 +289,11 @@ local function setupInfiniteJump()
 end
 
 ---------------------------------------------------------------------------
--- 투명인간 관련 변수 및 함수 (메인탭으로 이동)
+-- 투명인간 관련 변수 및 함수
 ---------------------------------------------------------------------------
 local invisibleEnabled = false
-local originalTransparency = {}
-local originalLocalTransparency = {}
+local invisibleOriginalTransparency = {}
+local invisibleOriginalLocalTransparency = {}
 
 local function setupInvisible()
     local player = game.Players.LocalPlayer
@@ -283,35 +301,32 @@ local function setupInvisible()
     if not character then return end
     
     if invisibleEnabled then
-        -- 모든 파트 투명하게 (다른 플레이어에게 안 보임)
         for _, v in pairs(character:GetDescendants()) do
             if v:IsA("BasePart") or v:IsA("MeshPart") or v:IsA("Part") then
-                if not originalTransparency[v] then
-                    originalTransparency[v] = v.Transparency
+                if not invisibleOriginalTransparency[v] then
+                    invisibleOriginalTransparency[v] = v.Transparency
                 end
                 v.Transparency = 1
             end
         end
         
-        -- 로컬 투명도 조절 (나에게는 보이게)
         for _, v in pairs(character:GetDescendants()) do
             if v:IsA("BasePart") or v:IsA("MeshPart") or v:IsA("Part") then
-                if not originalLocalTransparency[v] then
-                    originalLocalTransparency[v] = v.LocalTransparencyModifier
+                if not invisibleOriginalLocalTransparency[v] then
+                    invisibleOriginalLocalTransparency[v] = v.LocalTransparencyModifier
                 end
                 v.LocalTransparencyModifier = 0
             end
         end
         
-        -- 액세서리 처리
         local humanoid = character:FindFirstChildOfClass("Humanoid")
         if humanoid then
             for _, accessory in pairs(humanoid:GetAccessories()) do
                 if accessory:IsA("Accessory") then
                     local handle = accessory:FindFirstChild("Handle")
                     if handle then
-                        if not originalTransparency[handle] then
-                            originalTransparency[handle] = handle.Transparency
+                        if not invisibleOriginalTransparency[handle] then
+                            invisibleOriginalTransparency[handle] = handle.Transparency
                         end
                         handle.Transparency = 1
                     end
@@ -319,24 +334,82 @@ local function setupInvisible()
             end
         end
     else
-        -- 원래대로 복구
-        for part, transparency in pairs(originalTransparency) do
+        for part, transparency in pairs(invisibleOriginalTransparency) do
             if part and part.Parent then
                 part.Transparency = transparency
             end
         end
-        for part, localTrans in pairs(originalLocalTransparency) do
+        for part, localTrans in pairs(invisibleOriginalLocalTransparency) do
             if part and part.Parent then
                 part.LocalTransparencyModifier = localTrans
             end
         end
-        originalTransparency = {}
-        originalLocalTransparency = {}
+        invisibleOriginalTransparency = {}
+        invisibleOriginalLocalTransparency = {}
     end
 end
 
 ---------------------------------------------------------------------------
--- 메인 탭 UI (모든 기능 통합)
+-- 프리즈 핵 관련 변수 및 함수
+---------------------------------------------------------------------------
+local freezeEnabled = false
+local freezePosition = nil
+local freezeBodyPosition = nil
+local freezeConnection = nil
+
+local function setupFreeze()
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    if not character then return end
+    
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    
+    if not rootPart or not humanoid then return end
+    
+    if freezeEnabled then
+        freezePosition = rootPart.Position
+        
+        if freezeBodyPosition then
+            freezeBodyPosition:Destroy()
+        end
+        
+        freezeBodyPosition = Instance.new("BodyPosition")
+        freezeBodyPosition.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        freezeBodyPosition.P = 10000
+        freezeBodyPosition.D = 100
+        freezeBodyPosition.Position = freezePosition
+        freezeBodyPosition.Parent = rootPart
+        
+        if freezeConnection then
+            freezeConnection:Disconnect()
+        end
+        
+        freezeConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if freezeEnabled and rootPart and rootPart.Parent and freezeBodyPosition then
+                freezeBodyPosition.Position = freezePosition
+            end
+        end)
+        
+        humanoid.PlatformStand = true
+    else
+        if freezeBodyPosition then
+            freezeBodyPosition:Destroy()
+            freezeBodyPosition = nil
+        end
+        if freezeConnection then
+            freezeConnection:Disconnect()
+            freezeConnection = nil
+        end
+        if humanoid then
+            humanoid.PlatformStand = false
+        end
+        freezePosition = nil
+    end
+end
+
+---------------------------------------------------------------------------
+-- 메인 탭 UI
 ---------------------------------------------------------------------------
 
 -- 속도핵 섹션
@@ -395,7 +468,7 @@ local speedSlider = MainTab:CreateSlider({
     end
 })
 
--- 플라이핵 섹션 (새로 추가)
+-- 플라이핵 섹션
 local flySection = MainTab:CreateSection("플라이핵")
 
 local flyToggle = MainTab:CreateToggle({
@@ -437,8 +510,6 @@ local flySpeedSlider = MainTab:CreateSlider({
         if currentFlySpeedLabel then
             currentFlySpeedLabel:Set("현재 플라이 속도: " .. Value)
         end
-        
-        -- 플라이 속도는 setupFly에서 flySpeed 변수 사용
     end
 })
 
@@ -499,7 +570,7 @@ local jumpSlider = MainTab:CreateSlider({
     end
 })
 
--- 벽뚫핵 섹션 (메인탭으로 이동)
+-- 벽뚫핵 섹션 (수정됨)
 local noclipSection = MainTab:CreateSection("벽뚫핵")
 
 local noclipToggle = MainTab:CreateToggle({
@@ -519,14 +590,14 @@ local noclipToggle = MainTab:CreateToggle({
         else
             Rayfield:Notify({
                 Title = "벽뚫핵",
-                Content = "비활성화되었습니다.",
+                Content = "비활성화되었습니다. (원래 상태로 복구)",
                 Duration = 2
             })
         end
     end
 })
 
--- 무한점프 섹션 (메인탭으로 이동)
+-- 무한점프 섹션
 local infiniteJumpSection = MainTab:CreateSection("무한점프")
 
 local infiniteJumpToggle = MainTab:CreateToggle({
@@ -553,7 +624,7 @@ local infiniteJumpToggle = MainTab:CreateToggle({
     end
 })
 
--- 투명인간 섹션 (메인탭으로 이동)
+-- 투명인간 섹션
 local invisibleSection = MainTab:CreateSection("투명인간")
 
 local invisibleToggle = MainTab:CreateToggle({
@@ -574,6 +645,33 @@ local invisibleToggle = MainTab:CreateToggle({
             Rayfield:Notify({
                 Title = "투명인간",
                 Content = "비활성화되었습니다.",
+                Duration = 2
+            })
+        end
+    end
+})
+
+-- 프리즈 핵 섹션
+local freezeSection = MainTab:CreateSection("프리즈 핵")
+
+local freezeToggle = MainTab:CreateToggle({
+    Name = "프리즈",
+    CurrentValue = false,
+    Flag = "FreezeToggle",
+    Callback = function(Value)
+        freezeEnabled = Value
+        setupFreeze()
+        
+        if Value then
+            Rayfield:Notify({
+                Title = "프리즈 핵",
+                Content = "활성화되었습니다. (현재 위치에 고정)",
+                Duration = 2
+            })
+        else
+            Rayfield:Notify({
+                Title = "프리즈 핵",
+                Content = "비활성화되었습니다. (고정 해제)",
                 Duration = 2
             })
         end
@@ -613,7 +711,7 @@ game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
         setupFly()
     end
     
-    -- 벽뚫핵 재적용
+    -- 벽뚫핵 재적용 (수정됨)
     if noclipEnabled then
         wait(0.2)
         setupNoclip()
@@ -630,6 +728,12 @@ game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
         wait(0.2)
         setupInvisible()
     end
+    
+    -- 프리즈 핵 재적용
+    if freezeEnabled then
+        wait(0.2)
+        setupFreeze()
+    end
 end)
 
 ---------------------------------------------------------------------------
@@ -637,6 +741,6 @@ end)
 ---------------------------------------------------------------------------
 Rayfield:Notify({
     Title = "동혁이 쓰려고 만든 핵",
-    Content = "메인 탭에 모든 기능 통합 완료! (플라이핵 추가)",
+    Content = "벽뚫핵 수정 완료! (껐다 켜도 이상해지지 않음)",
     Duration = 4
 })
