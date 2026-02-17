@@ -1,16 +1,16 @@
 --[[
     Rayfield Gui - Dong Universe
-    Version: 1.5
+    Full Version 2.0 - 모든 기능 완벽 구현
 ]]
 
 -- Rayfield Interface 선언
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- 키 시스템 제거 (항상 False로 설정)
+-- 키 시스템 제거
 local Window = Rayfield:CreateWindow({
     Name = "Dong Universe",
     LoadingTitle = "Dong Universe Script",
-    LoadingSubtitle = "by Rayfield",
+    LoadingSubtitle = "Full Version 2.0",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "DongUniverse",
@@ -39,62 +39,128 @@ local TeleportTab = Window:CreateTab("텔레포트", "arrow-right")
 local OtherTab = Window:CreateTab("그 외", "gamepad-2")
 local InfoTab = Window:CreateTab("정보", "info")
 
--- 플라이 기능 변수
-local flyActive = false
+-----------------------
+-- 전역 변수 선언
+-----------------------
+
+-- 플라이 기능 변수 (하늘을 나는 기능)
+local flyEnabled = false
 local flySpeed = 50
 local flyBodyVelocity = nil
 local flyConnection = nil
 
--- 점프 기능 변수
-local jumpActive = false
+-- 속도 기능 변수 (이동속도 증가)
+local speedEnabled = false
+local speedValue = 50
+local originalWalkSpeed = 16
+
+-- 점프 기능 변수 (점프력 증가)
+local jumpEnabled = false
 local jumpPower = 50
 local originalJumpPower = 50
 
--- 속도 기능 변수
-local speedActive = false
-local speedValue = 50
-local speedConnection = nil
-
--- 텔레포트 워크 기능 변수
-local teleportActive = false
-local teleportSpeed = 50
-local teleportConnection = nil
+-- 텔레포트 워크 변수 (순간이동 이동)
+local teleportWalkEnabled = false
+local teleportWalkSpeed = 50
+local teleportWalkConnection = nil
 local lastPosition = nil
 
--- 중력 기능 변수
-local gravityActive = false
+-- 중력 변수
+local gravityEnabled = false
 local gravityValue = 50
 local originalGravity = 196.2
 
--- 프리즈 기능 변수
-local freezeActive = false
+-- 프리즈 변수
+local freezeEnabled = false
 local freezePosition = nil
 local freezeBodyPosition = nil
 local freezeConnection = nil
 
--- 투명인간 기능 변수
-local invisibleActive = false
+-- 투명인간 변수
+local invisibleEnabled = false
 local originalTransparency = {}
 local originalLocalTransparency = {}
 
--- 벽뚫기 기능 변수
-local noclipActive = false
+-- 벽뚫기 변수
+local noclipEnabled = false
 local noclipConnection = nil
+
+-- 에임 TP 변수
+local aimTPEnabled = false
 
 -- 텔레포트 탭 변수
 local playerList = {}
 local selectedPlayer = nil
 
--- 플라이 기능 함수
+-----------------------
+-- 플라이 기능 (하늘을 나는 기능)
+-----------------------
 local function toggleFly()
     local player = game.Players.LocalPlayer
-    local character = player.Character or player.CharacterAdded:Wait()
+    local character = player.Character
+    if not character then return end
+    
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     
-    if not rootPart or not humanoid then return end
+    if not humanoid or not rootPart then return end
     
-    if flyActive then
+    if flyEnabled then
+        -- 플라이 활성화
+        humanoid.PlatformStand = true
+        
+        -- BodyVelocity 생성
+        if flyBodyVelocity then
+            flyBodyVelocity:Destroy()
+        end
+        
+        flyBodyVelocity = Instance.new("BodyVelocity")
+        flyBodyVelocity.MaxForce = Vector3.new(1, 1, 1) * math.huge
+        flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        flyBodyVelocity.Parent = rootPart
+        
+        -- 플라이 루프
+        if flyConnection then
+            flyConnection:Disconnect()
+        end
+        
+        flyConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if flyEnabled and rootPart and rootPart.Parent and flyBodyVelocity then
+                local moveDirection = Vector3.new(0, 0, 0)
+                local camera = workspace.CurrentCamera
+                
+                -- WASD 키 입력 처리
+                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.W) then
+                    moveDirection = moveDirection + camera.CFrame.LookVector
+                end
+                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.S) then
+                    moveDirection = moveDirection - camera.CFrame.LookVector
+                end
+                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.A) then
+                    moveDirection = moveDirection - camera.CFrame.RightVector
+                end
+                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.D) then
+                    moveDirection = moveDirection + camera.CFrame.RightVector
+                end
+                
+                -- 상하 이동
+                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.Space) then
+                    moveDirection = moveDirection + Vector3.new(0, 1, 0)
+                end
+                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftControl) then
+                    moveDirection = moveDirection + Vector3.new(0, -1, 0)
+                end
+                
+                -- 방향 정규화 및 속도 적용
+                if moveDirection.Magnitude > 0 then
+                    moveDirection = moveDirection.Unit * flySpeed
+                end
+                
+                flyBodyVelocity.Velocity = moveDirection
+            end
+        end)
+    else
+        -- 플라이 비활성화
         if flyBodyVelocity then
             flyBodyVelocity:Destroy()
             flyBodyVelocity = nil
@@ -103,71 +169,47 @@ local function toggleFly()
             flyConnection:Disconnect()
             flyConnection = nil
         end
-        humanoid.PlatformStand = false
-    else
-        humanoid.PlatformStand = true
-        
-        flyBodyVelocity = Instance.new("BodyVelocity")
-        flyBodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
-        flyBodyVelocity.P = 4000
-        flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
-        flyBodyVelocity.Parent = rootPart
-        
-        flyConnection = game:GetService("RunService").Heartbeat:Connect(function()
-            if flyActive and rootPart and flyBodyVelocity then
-                local moveDirection = Vector3.new(0, 0, 0)
-                
-                -- W/S 키 (앞/뒤)
-                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.W) then
-                    moveDirection = moveDirection + workspace.CurrentCamera.CFrame.LookVector
-                end
-                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.S) then
-                    moveDirection = moveDirection - workspace.CurrentCamera.CFrame.LookVector
-                end
-                
-                -- A/D 키 (좌/우)
-                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.A) then
-                    moveDirection = moveDirection - workspace.CurrentCamera.CFrame.RightVector
-                end
-                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.D) then
-                    moveDirection = moveDirection + workspace.CurrentCamera.CFrame.RightVector
-                end
-                
-                -- 스페이스/컨트롤 키 (위/아래)
-                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.Space) then
-                    moveDirection = moveDirection + Vector3.new(0, 1, 0)
-                end
-                if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftControl) then
-                    moveDirection = moveDirection + Vector3.new(0, -1, 0)
-                end
-                
-                if moveDirection.Magnitude > 0 then
-                    moveDirection = moveDirection.Unit * flySpeed
-                end
-                
-                flyBodyVelocity.Velocity = moveDirection
-            end
-        end)
+        if humanoid then
+            humanoid.PlatformStand = false
+        end
     end
 end
 
--- 속도 기능 함수
+-----------------------
+-- 속도 기능 (이동속도 증가)
+-----------------------
 local function toggleSpeed()
     local player = game.Players.LocalPlayer
-    local character = player.Character or player.CharacterAdded:Wait()
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local character = player.Character
+    if not character then return end
     
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
     if not humanoid then return end
     
-    if speedActive then
+    if speedEnabled then
+        -- 현재 속도 저장 (처음 한번만)
+        if originalWalkSpeed == 16 then
+            originalWalkSpeed = humanoid.WalkSpeed
+        end
+        
+        -- 속도 적용
         humanoid.WalkSpeed = speedValue
+        
+        -- 지속적으로 속도 유지
+        if speedConnection then
+            speedConnection:Disconnect()
+        end
+        
         speedConnection = game:GetService("RunService").Heartbeat:Connect(function()
-            if speedActive and humanoid then
+            if speedEnabled and humanoid and humanoid.Parent then
                 humanoid.WalkSpeed = speedValue
             end
         end)
     else
-        humanoid.WalkSpeed = 16
+        -- 원래 속도로 복구
+        if humanoid then
+            humanoid.WalkSpeed = originalWalkSpeed
+        end
         if speedConnection then
             speedConnection:Disconnect()
             speedConnection = nil
@@ -175,59 +217,96 @@ local function toggleSpeed()
     end
 end
 
--- 텔레포트 워크 함수
-local function toggleTeleport()
+-----------------------
+-- 점프 기능 (점프력 증가)
+-----------------------
+local function toggleJump()
     local player = game.Players.LocalPlayer
-    local character = player.Character or player.CharacterAdded:Wait()
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    local character = player.Character
+    if not character then return end
+    
     local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
     
-    if not rootPart or not humanoid then return end
+    if jumpEnabled then
+        -- 원래 점프력 저장 (처음 한번만)
+        if originalJumpPower == 50 then
+            originalJumpPower = humanoid.JumpPower
+        end
+        
+        -- 점프력 적용
+        humanoid.JumpPower = jumpPower
+    else
+        -- 원래 점프력으로 복구
+        humanoid.JumpPower = originalJumpPower
+    end
+end
+
+-----------------------
+-- 텔레포트 워크 (순간이동 이동)
+-----------------------
+local function toggleTeleportWalk()
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    if not character then return end
     
-    if teleportActive then
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+    
+    if teleportWalkEnabled then
         lastPosition = rootPart.Position
         
-        teleportConnection = game:GetService("RunService").Heartbeat:Connect(function()
-            if teleportActive and rootPart then
+        if teleportWalkConnection then
+            teleportWalkConnection:Disconnect()
+        end
+        
+        teleportWalkConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if teleportWalkEnabled and rootPart and rootPart.Parent then
                 local currentPos = rootPart.Position
                 local distance = (currentPos - lastPosition).Magnitude
                 
-                if distance > teleportSpeed then
+                if distance > teleportWalkSpeed then
                     local direction = (currentPos - lastPosition).Unit
-                    rootPart.CFrame = CFrame.new(lastPosition + direction * teleportSpeed)
+                    rootPart.CFrame = CFrame.new(lastPosition + direction * teleportWalkSpeed)
                 end
                 
                 lastPosition = rootPart.Position
             end
         end)
     else
-        if teleportConnection then
-            teleportConnection:Disconnect()
-            teleportConnection = nil
+        if teleportWalkConnection then
+            teleportWalkConnection:Disconnect()
+            teleportWalkConnection = nil
         end
         lastPosition = nil
     end
 end
 
--- 중력 기능 함수
+-----------------------
+-- 중력 기능
+-----------------------
 local function toggleGravity()
-    if gravityActive then
+    if gravityEnabled then
         workspace.Gravity = gravityValue
     else
         workspace.Gravity = originalGravity
     end
 end
 
--- 프리즈 기능 함수
+-----------------------
+-- 프리즈 기능
+-----------------------
 local function toggleFreeze()
     local player = game.Players.LocalPlayer
-    local character = player.Character or player.CharacterAdded:Wait()
+    local character = player.Character
+    if not character then return end
+    
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     
     if not rootPart or not humanoid then return end
     
-    if freezeActive then
+    if freezeEnabled then
         freezePosition = rootPart.Position
         
         if freezeBodyPosition then
@@ -241,8 +320,12 @@ local function toggleFreeze()
         freezeBodyPosition.Position = freezePosition
         freezeBodyPosition.Parent = rootPart
         
+        if freezeConnection then
+            freezeConnection:Disconnect()
+        end
+        
         freezeConnection = game:GetService("RunService").Heartbeat:Connect(function()
-            if freezeActive and rootPart and freezeBodyPosition then
+            if freezeEnabled and rootPart and rootPart.Parent and freezeBodyPosition then
                 freezeBodyPosition.Position = freezePosition
             end
         end)
@@ -261,14 +344,16 @@ local function toggleFreeze()
     end
 end
 
--- 투명인간 함수
+-----------------------
+-- 투명인간 기능
+-----------------------
 local function toggleInvisible()
     local player = game.Players.LocalPlayer
-    local character = player.Character or player.CharacterAdded:Wait()
-    
+    local character = player.Character
     if not character then return end
     
-    if invisibleActive then
+    if invisibleEnabled then
+        -- 모든 파트 투명하게
         for _, v in pairs(character:GetDescendants()) do
             if v:IsA("BasePart") or v:IsA("MeshPart") or v:IsA("Part") then
                 if not originalTransparency[v] then
@@ -278,6 +363,7 @@ local function toggleInvisible()
             end
         end
         
+        -- 로컬 투명도 조절 (본인에게는 보이게)
         for _, v in pairs(character:GetDescendants()) do
             if v:IsA("BasePart") or v:IsA("MeshPart") or v:IsA("Part") then
                 if not originalLocalTransparency[v] then
@@ -287,6 +373,7 @@ local function toggleInvisible()
             end
         end
         
+        -- 액세서리 처리
         local humanoid = character:FindFirstChildOfClass("Humanoid")
         if humanoid then
             for _, accessory in pairs(humanoid:GetAccessories()) do
@@ -302,6 +389,7 @@ local function toggleInvisible()
             end
         end
     else
+        -- 원래대로 복구
         for part, transparency in pairs(originalTransparency) do
             if part and part.Parent then
                 part.Transparency = transparency
@@ -317,12 +405,17 @@ local function toggleInvisible()
     end
 end
 
--- 벽뚫기 함수 (Noclip)
+-----------------------
+-- 벽뚫기 기능
+-----------------------
 local function toggleNoclip()
-    if noclipActive then
-        -- 벽뚫기 활성화
+    if noclipEnabled then
+        if noclipConnection then
+            noclipConnection:Disconnect()
+        end
+        
         noclipConnection = game:GetService("RunService").Stepped:Connect(function()
-            if noclipActive then
+            if noclipEnabled then
                 local player = game.Players.LocalPlayer
                 local character = player.Character
                 if character then
@@ -335,7 +428,6 @@ local function toggleNoclip()
             end
         end)
     else
-        -- 벽뚫기 비활성화 - 원래대로 복구
         if noclipConnection then
             noclipConnection:Disconnect()
             noclipConnection = nil
@@ -353,7 +445,9 @@ local function toggleNoclip()
     end
 end
 
--- 플레이어 목록 업데이트 함수
+-----------------------
+-- 플레이어 목록 업데이트
+-----------------------
 local function updatePlayerList()
     playerList = {}
     for _, player in pairs(game.Players:GetPlayers()) do
@@ -364,7 +458,9 @@ local function updatePlayerList()
     return playerList
 end
 
+-----------------------
 -- 텔레포트 함수
+-----------------------
 local function teleportTo(position)
     local player = game.Players.LocalPlayer
     local character = player.Character
@@ -376,9 +472,11 @@ local function teleportTo(position)
     end
 end
 
--- 에임 TP (Z 키 고정)
+-----------------------
+-- 에임 TP (Z 키)
+-----------------------
 game:GetService("UserInputService").InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.Z then
+    if input.KeyCode == Enum.KeyCode.Z and aimTPEnabled then
         local player = game.Players.LocalPlayer
         local character = player.Character
         if character then
@@ -398,15 +496,24 @@ game:GetService("UserInputService").InputBegan:Connect(function(input)
     end
 end)
 
--- 메인 탭
-local flySection = MainTab:CreateSection("플라이")
+-----------------------
+-- 메인 탭 - 모든 기능
+-----------------------
+
+-- 플라이 섹션
+local flySection = MainTab:CreateSection("플라이 (하늘 날기)")
 local flyToggle = MainTab:CreateToggle({
     Name = "플라이",
     CurrentValue = false,
     Flag = "FlyToggle",
     Callback = function(Value)
-        flyActive = Value
+        flyEnabled = Value
         toggleFly()
+        Rayfield:Notify({
+            Title = "플라이",
+            Content = Value and "활성화되었습니다. WASD + 스페이스/컨트롤로 이동" or "비활성화되었습니다.",
+            Duration = 2
+        })
     end
 })
 
@@ -422,14 +529,20 @@ local flySlider = MainTab:CreateSlider({
     end
 })
 
-local speedSection = MainTab:CreateSection("속도")
+-- 속도 섹션 (이동속도)
+local speedSection = MainTab:CreateSection("속도 (이동속도 증가)")
 local speedToggle = MainTab:CreateToggle({
-    Name = "속도",
+    Name = "속도 증가",
     CurrentValue = false,
     Flag = "SpeedToggle",
     Callback = function(Value)
-        speedActive = Value
+        speedEnabled = Value
         toggleSpeed()
+        Rayfield:Notify({
+            Title = "속도",
+            Content = Value and "활성화되었습니다. 이동속도가 증가합니다." or "비활성화되었습니다.",
+            Duration = 2
+        })
     end
 })
 
@@ -442,7 +555,7 @@ local speedSlider = MainTab:CreateSlider({
     Flag = "SpeedValueSlider",
     Callback = function(Value)
         speedValue = Value
-        if speedActive then
+        if speedEnabled then
             local player = game.Players.LocalPlayer
             local character = player.Character
             if character then
@@ -455,14 +568,20 @@ local speedSlider = MainTab:CreateSlider({
     end
 })
 
-local teleportWalkSection = MainTab:CreateSection("텔레포트 워크")
+-- 텔레포트 워크 섹션
+local teleportWalkSection = MainTab:CreateSection("텔레포트 워크 (순간이동 이동)")
 local teleportWalkToggle = MainTab:CreateToggle({
     Name = "텔레포트 워크",
     CurrentValue = false,
     Flag = "TeleportWalkToggle",
     Callback = function(Value)
-        teleportActive = Value
-        toggleTeleport()
+        teleportWalkEnabled = Value
+        toggleTeleportWalk()
+        Rayfield:Notify({
+            Title = "텔레포트 워크",
+            Content = Value and "활성화되었습니다. 설정된 속도로 순간이동하며 이동합니다." or "비활성화되었습니다.",
+            Duration = 2
+        })
     end
 })
 
@@ -474,35 +593,29 @@ local teleportWalkSlider = MainTab:CreateSlider({
     CurrentValue = 50,
     Flag = "TeleportWalkSpeedSlider",
     Callback = function(Value)
-        teleportSpeed = Value
+        teleportWalkSpeed = Value
     end
 })
 
-local jumpSection = MainTab:CreateSection("점프")
+-- 점프 섹션
+local jumpSection = MainTab:CreateSection("점프 (점프력 증가)")
 local jumpToggle = MainTab:CreateToggle({
-    Name = "점프",
+    Name = "점프력 증가",
     CurrentValue = false,
     Flag = "JumpToggle",
     Callback = function(Value)
-        jumpActive = Value
-        local player = game.Players.LocalPlayer
-        local character = player.Character
-        if character then
-            local humanoid = character:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                if Value then
-                    originalJumpPower = humanoid.JumpPower
-                    humanoid.JumpPower = jumpPower
-                else
-                    humanoid.JumpPower = originalJumpPower
-                end
-            end
-        end
+        jumpEnabled = Value
+        toggleJump()
+        Rayfield:Notify({
+            Title = "점프력",
+            Content = Value and "활성화되었습니다. 더 높이 점프할 수 있습니다." or "비활성화되었습니다.",
+            Duration = 2
+        })
     end
 })
 
 local jumpSlider = MainTab:CreateSlider({
-    Name = "점프력",
+    Name = "점프력 값",
     Range = {1, 500},
     Increment = 1,
     Suffix = "힘",
@@ -510,7 +623,7 @@ local jumpSlider = MainTab:CreateSlider({
     Flag = "JumpPowerSlider",
     Callback = function(Value)
         jumpPower = Value
-        if jumpActive then
+        if jumpEnabled then
             local player = game.Players.LocalPlayer
             local character = player.Character
             if character then
@@ -523,14 +636,20 @@ local jumpSlider = MainTab:CreateSlider({
     end
 })
 
+-- 중력 섹션
 local gravitySection = MainTab:CreateSection("중력")
 local gravityToggle = MainTab:CreateToggle({
     Name = "중력 조절",
     CurrentValue = false,
     Flag = "GravityToggle",
     Callback = function(Value)
-        gravityActive = Value
+        gravityEnabled = Value
         toggleGravity()
+        Rayfield:Notify({
+            Title = "중력",
+            Content = Value and "활성화되었습니다. 중력이 변경됩니다." or "비활성화되었습니다.",
+            Duration = 2
+        })
     end
 })
 
@@ -543,68 +662,86 @@ local gravitySlider = MainTab:CreateSlider({
     Flag = "GravitySlider",
     Callback = function(Value)
         gravityValue = Value
-        if gravityActive then
+        if gravityEnabled then
             workspace.Gravity = Value
         end
     end
 })
 
+-- 프리즈 섹션
 local freezeSection = MainTab:CreateSection("프리즈")
 local freezeToggle = MainTab:CreateToggle({
     Name = "프리즈",
     CurrentValue = false,
     Flag = "FreezeToggle",
     Callback = function(Value)
-        freezeActive = Value
+        freezeEnabled = Value
         toggleFreeze()
+        Rayfield:Notify({
+            Title = "프리즈",
+            Content = Value and "활성화되었습니다. 현재 위치에 고정됩니다." or "비활성화되었습니다.",
+            Duration = 2
+        })
     end
 })
 
+-- 투명인간 섹션
 local invisibleSection = MainTab:CreateSection("투명인간")
 local invisibleToggle = MainTab:CreateToggle({
     Name = "투명인간",
     CurrentValue = false,
     Flag = "InvisibleToggle",
     Callback = function(Value)
-        invisibleActive = Value
+        invisibleEnabled = Value
         toggleInvisible()
+        Rayfield:Notify({
+            Title = "투명인간",
+            Content = Value and "활성화되었습니다. 다른 플레이어에게 보이지 않습니다." or "비활성화되었습니다.",
+            Duration = 2
+        })
     end
 })
 
--- 벽뚫기 섹션 추가
+-- 벽뚫기 섹션
 local noclipSection = MainTab:CreateSection("벽뚫기")
 local noclipToggle = MainTab:CreateToggle({
-    Name = "벽뚫기 (Noclip)",
+    Name = "벽뚫기",
     CurrentValue = false,
     Flag = "NoclipToggle",
     Callback = function(Value)
-        noclipActive = Value
+        noclipEnabled = Value
         toggleNoclip()
-        
-        if Value then
-            Rayfield:Notify({
-                Title = "벽뚫기 활성화",
-                Content = "이제 벽을 뚫고 지나갈 수 있습니다! (바닥 제외)",
-                Duration = 2
-            })
-        else
-            Rayfield:Notify({
-                Title = "벽뚫기 비활성화",
-                Content = "벽뚫기 기능이 꺼졌습니다.",
-                Duration = 2
-            })
-        end
+        Rayfield:Notify({
+            Title = "벽뚫기",
+            Content = Value and "활성화되었습니다. 벽을 통과할 수 있습니다." or "비활성화되었습니다.",
+            Duration = 2
+        })
     end
 })
 
+-----------------------
 -- 텔레포트 탭
-local teleportMainSection = TeleportTab:CreateSection("텔레포트 기능")
+-----------------------
+local teleportMainSection = TeleportTab:CreateSection("에임 TP")
 
--- 에임 TP 설명
-TeleportTab:CreateLabel("에임 TP (Z 키 고정)")
-TeleportTab:CreateLabel("Z 키를 누르면 마우스 위치로 순간이동")
+local aimTPToggle = TeleportTab:CreateToggle({
+    Name = "에임 TP (Z 키)",
+    CurrentValue = false,
+    Flag = "AimTPToggle",
+    Callback = function(Value)
+        aimTPEnabled = Value
+        Rayfield:Notify({
+            Title = "에임 TP",
+            Content = Value and "활성화되었습니다. Z 키를 눌러 마우스 위치로 순간이동하세요." or "비활성화되었습니다.",
+            Duration = 2
+        })
+    end
+})
 
--- 하늘로 텔레포트
+TeleportTab:CreateLabel("에임 TP가 켜져 있을 때만 Z 키로 순간이동 가능")
+
+local teleportButtonsSection = TeleportTab:CreateSection("위치 텔레포트")
+
 TeleportTab:CreateButton({
     Name = "하늘로 텔레포트 (500 스터드)",
     Callback = function()
@@ -625,7 +762,6 @@ TeleportTab:CreateButton({
     end
 })
 
--- 땅으로 텔레포트
 TeleportTab:CreateButton({
     Name = "땅으로 텔레포트",
     Callback = function()
@@ -649,11 +785,9 @@ TeleportTab:CreateButton({
     end
 })
 
--- 스폰지점으로 텔레포트
 TeleportTab:CreateButton({
     Name = "스폰지점으로 텔레포트",
     Callback = function()
-        local player = game.Players.LocalPlayer
         local spawnLocation = workspace:FindFirstChild("SpawnLocation") or workspace:FindFirstChild("Spawn")
         
         if spawnLocation then
@@ -664,30 +798,25 @@ TeleportTab:CreateButton({
                 Duration = 2
             })
         else
-            local player = game.Players.LocalPlayer
-            local character = player.Character
-            if character then
-                local rootPart = character:FindFirstChild("HumanoidRootPart")
-                if rootPart then
-                    teleportTo(Vector3.new(0, 50, 0))
-                    Rayfield:Notify({
-                        Title = "스폰 텔레포트",
-                        Content = "기본 위치로 이동했습니다.",
-                        Duration = 2
-                    })
-                end
-            end
+            teleportTo(Vector3.new(0, 50, 0))
+            Rayfield:Notify({
+                Title = "스폰 텔레포트",
+                Content = "기본 위치로 이동했습니다.",
+                Duration = 2
+            })
         end
     end
 })
 
-local playerListSection = TeleportTab:CreateSection("플레이어 목록")
+local playerListSection = TeleportTab:CreateSection("플레이어 텔레포트")
 
--- 플레이어 목록 새로고침 버튼
 TeleportTab:CreateButton({
-    Name = "목록 새로고침",
+    Name = "플레이어 목록 새로고침",
     Callback = function()
         local players = updatePlayerList()
+        if playerDropdown then
+            playerDropdown:Set(players)
+        end
         Rayfield:Notify({
             Title = "목록 새로고침",
             Content = "플레이어 목록이 업데이트되었습니다.",
@@ -696,7 +825,6 @@ TeleportTab:CreateButton({
     end
 })
 
--- 플레이어 선택 드롭다운
 local playerDropdown = TeleportTab:CreateDropdown({
     Name = "플레이어 선택",
     Options = updatePlayerList(),
@@ -707,9 +835,8 @@ local playerDropdown = TeleportTab:CreateDropdown({
     end
 })
 
--- 상대에게 텔레포트 버튼
 TeleportTab:CreateButton({
-    Name = "상대에게 텔레포트",
+    Name = "선택한 플레이어에게 텔레포트",
     Callback = function()
         if selectedPlayer then
             local targetPlayer = game.Players:FindFirstChild(selectedPlayer)
@@ -719,7 +846,7 @@ TeleportTab:CreateButton({
                     wait(0.1)
                     teleportTo(targetRoot.Position + Vector3.new(0, 3, 0))
                     Rayfield:Notify({
-                        Title = "상대 텔레포트",
+                        Title = "플레이어 텔레포트",
                         Content = selectedPlayer .. "님에게 이동했습니다.",
                         Duration = 2
                     })
@@ -741,7 +868,7 @@ TeleportTab:CreateButton({
     end
 })
 
--- 플레이어 목록 주기적 업데이트
+-- 플레이어 목록 자동 업데이트
 spawn(function()
     while wait(5) do
         if playerDropdown then
@@ -750,29 +877,24 @@ spawn(function()
     end
 end)
 
+-----------------------
 -- 그 외 탭
+-----------------------
 local otherSection = OtherTab:CreateSection("기타 기능")
 
--- 서버 링크 복사 기능
 OtherTab:CreateButton({
     Name = "현재 서버 링크 복사",
     Callback = function()
         local success, result = pcall(function()
-            local gameId = game.GameId
             local placeId = game.PlaceId
             local jobId = game.JobId
-            
             local serverLink = string.format("https://www.roblox.com/games/%d?privateServerLinkCode=%s", placeId, jobId)
-            
             setclipboard(serverLink)
-            
             Rayfield:Notify({
                 Title = "서버 링크 복사됨",
                 Content = "서버 링크가 클립보드에 복사되었습니다.",
                 Duration = 3
             })
-            
-            return serverLink
         end)
         
         if not success then
@@ -815,59 +937,66 @@ OtherTab:CreateButton({
 OtherTab:CreateButton({
     Name = "모든 기능 끄기",
     Callback = function()
-        if flyActive then
-            flyActive = false
+        -- 플라이 끄기
+        if flyEnabled then
+            flyEnabled = false
             toggleFly()
             flyToggle:Set(false)
         end
         
-        if speedActive then
-            speedActive = false
+        -- 속도 끄기
+        if speedEnabled then
+            speedEnabled = false
             toggleSpeed()
             speedToggle:Set(false)
         end
         
-        if teleportActive then
-            teleportActive = false
-            toggleTeleport()
+        -- 텔레포트 워크 끄기
+        if teleportWalkEnabled then
+            teleportWalkEnabled = false
+            toggleTeleportWalk()
             teleportWalkToggle:Set(false)
         end
         
-        if jumpActive then
-            jumpActive = false
-            local player = game.Players.LocalPlayer
-            local character = player.Character
-            if character then
-                local humanoid = character:FindFirstChildOfClass("Humanoid")
-                if humanoid then
-                    humanoid.JumpPower = originalJumpPower
-                end
-            end
+        -- 점프 끄기
+        if jumpEnabled then
+            jumpEnabled = false
+            toggleJump()
             jumpToggle:Set(false)
         end
         
-        if gravityActive then
-            gravityActive = false
+        -- 중력 끄기
+        if gravityEnabled then
+            gravityEnabled = false
             toggleGravity()
             gravityToggle:Set(false)
         end
         
-        if freezeActive then
-            freezeActive = false
+        -- 프리즈 끄기
+        if freezeEnabled then
+            freezeEnabled = false
             toggleFreeze()
             freezeToggle:Set(false)
         end
         
-        if invisibleActive then
-            invisibleActive = false
+        -- 투명인간 끄기
+        if invisibleEnabled then
+            invisibleEnabled = false
             toggleInvisible()
             invisibleToggle:Set(false)
         end
         
-        if noclipActive then
-            noclipActive = false
+        -- 벽뚫기 끄기
+        if noclipEnabled then
+            noclipEnabled = false
             toggleNoclip()
             noclipToggle:Set(false)
+        end
+        
+        -- 에임 TP 끄기
+        if aimTPEnabled then
+            aimTPEnabled = false
+            aimTPToggle:Set(false)
         end
         
         Rayfield:Notify({
@@ -878,17 +1007,30 @@ OtherTab:CreateButton({
     end
 })
 
+-----------------------
 -- 정보 탭
+-----------------------
 local infoSection = InfoTab:CreateSection("스크립트 정보")
 InfoTab:CreateLabel("스크립트 이름: Dong Universe")
-InfoTab:CreateLabel("버전: 1.5")
+InfoTab:CreateLabel("버전: 2.0 (완벽 구현)")
 InfoTab:CreateLabel("제작자: Rayfield User")
-InfoTab:CreateLabel("설명: Dong Universe 게임을 위한 핵 스크립트")
+InfoTab:CreateLabel("설명: Dong Universe 게임을 위한 올인원 핵 스크립트")
 InfoTab:CreateLabel("")
-InfoTab:CreateLabel("새 기능:")
-InfoTab:CreateLabel("- 벽뚫기 (Noclip)")
+InfoTab:CreateLabel("메인 탭 기능:")
+InfoTab:CreateLabel("• 플라이 - 하늘을 나는 기능 (WASD + 스페이스/컨트롤)")
+InfoTab:CreateLabel("• 속도 - 이동속도 증가 (1~2000)")
+InfoTab:CreateLabel("• 텔레포트 워크 - 순간이동 이동 (1~2000)")
+InfoTab:CreateLabel("• 점프 - 점프력 증가 (1~500)")
+InfoTab:CreateLabel("• 중력 - 중력 조절 (0~100)")
+InfoTab:CreateLabel("• 프리즈 - 현재 위치에 고정")
+InfoTab:CreateLabel("• 투명인간 - 다른 플레이어에게 보이지 않음")
+InfoTab:CreateLabel("• 벽뚫기 - 벽 통과")
+InfoTab:CreateLabel("")
+InfoTab:CreateLabel("텔레포트 탭 기능:")
+InfoTab:CreateLabel("• 에임 TP (Z 키) - 마우스 위치로 순간이동")
+InfoTab:CreateLabel("• 하늘/땅/스폰 텔레포트")
+InfoTab:CreateLabel("• 플레이어 목록 및 텔레포트")
 
--- 계정 정보 섹션
 local accountSection = InfoTab:CreateSection("계정 정보")
 
 -- 계정 정보 표시
@@ -903,38 +1045,64 @@ InfoTab:CreateLabel("계정 나이: " .. accountAge .. "일")
 InfoTab:CreateLabel("표시 이름: " .. displayName)
 InfoTab:CreateLabel("사용자 이름: " .. userName)
 
+-----------------------
 -- 캐릭터 변경 시 처리
+-----------------------
 game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
     wait(1)
-    if flyActive then
+    
+    -- 캐릭터가 로드될 때까지 대기
+    local humanoid = character:WaitForChild("Humanoid")
+    local rootPart = character:WaitForChild("HumanoidRootPart")
+    
+    if flyEnabled then
         toggleFly()
     end
-    if speedActive then
+    
+    if speedEnabled then
+        wait(0.5)
         toggleSpeed()
     end
-    if teleportActive then
-        toggleTeleport()
+    
+    if teleportWalkEnabled then
+        wait(0.5)
+        toggleTeleportWalk()
     end
-    if jumpActive then
-        local humanoid = character:WaitForChild("Humanoid")
-        if humanoid then
-            humanoid.JumpPower = jumpPower
-        end
+    
+    if jumpEnabled then
+        wait(0.5)
+        humanoid.JumpPower = jumpPower
     end
-    if freezeActive then
+    
+    if freezeEnabled then
+        wait(0.5)
         toggleFreeze()
     end
-    if invisibleActive then
+    
+    if invisibleEnabled then
+        wait(0.5)
         toggleInvisible()
     end
-    if noclipActive then
+    
+    if noclipEnabled then
+        wait(0.5)
         toggleNoclip()
     end
 end)
 
+-----------------------
 -- 초기화 완료 알림
+-----------------------
 Rayfield:Notify({
     Title = "Dong Universe",
-    Content = "스크립트가 성공적으로 로드되었습니다! (벽뚫기 기능 추가)",
+    Content = "스크립트가 성공적으로 로드되었습니다! (Full Version 2.0)",
     Duration = 3
+})
+
+-- 사용법 안내
+wait(1)
+Rayfield:Notify({
+    Title = "사용법 안내",
+    Content = "메인 탭에서 각 기능을 켜고 끌 수 있습니다. 슬라이더로 세부 조절이 가능합니다.",
+    Duration = 5
 })
