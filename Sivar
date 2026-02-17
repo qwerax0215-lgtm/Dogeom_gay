@@ -284,105 +284,63 @@ local function setupInfiniteJump()
 end
 
 ---------------------------------------------------------------------------
--- 투명인간 관련 변수 및 함수 (완전히 개선됨)
+-- 투명인간 관련 변수 및 함수 (완전히 수정됨)
 ---------------------------------------------------------------------------
 local invisibleEnabled = false
-local invisibleParts = {}  -- 모든 파트의 원본 데이터 저장
+local invisibleParts = {}  -- 모든 파트의 원본 투명도 저장
 
 local function setupInvisible()
     local player = game.Players.LocalPlayer
     local character = player.Character
-    if not character then return end
+    if not character then 
+        print("[투명핵] 캐릭터 없음")
+        return 
+    end
     
     if invisibleEnabled then
-        -- 투명핵 켜기: 모든 파트의 현재 상태 저장 후 투명하게
-        invisibleParts = {}  -- 초기화
+        -- 투명핵 켜기: 모든 파트의 원래 투명도 저장 후 투명하게
+        invisibleParts = {}
         
-        -- 캐릭터의 모든 파트 수집 (몸통, 팔, 다리, 머리 등)
-        for _, v in pairs(character:GetDescendants()) do
-            if v:IsA("BasePart") or v:IsA("MeshPart") or v:IsA("Part") then
-                -- 각 파트의 원본 데이터 저장
-                invisibleParts[v] = {
-                    Transparency = v.Transparency,
-                    LocalTransparencyModifier = v.LocalTransparencyModifier,
-                    Visible = v.Visible
-                }
-                
-                -- 투명하게 설정 (다른 플레이어에게 안 보임)
-                v.Transparency = 1
-                -- 로컬에서는 보이게 (선택사항, 0으로 두면 나에게는 보임)
-                v.LocalTransparencyModifier = 0
-                v.Visible = true
+        -- 캐릭터의 모든 파트를 찾아서 처리
+        local function processPart(part)
+            if part:IsA("BasePart") or part:IsA("MeshPart") or part:IsA("Part") then
+                -- 원래 투명도 저장
+                invisibleParts[part] = part.Transparency
+                -- 완전 투명하게 설정 (상대방에게 안 보임)
+                part.Transparency = 1
+                -- 로컬에서도 안 보이게 (나에게도 안 보임)
+                part.LocalTransparencyModifier = 1
             end
         end
         
-        -- 액세서리(모자, 가방 등) 처리
+        -- 캐릭터의 모든 자손들 처리
+        for _, v in pairs(character:GetDescendants()) do
+            processPart(v)
+        end
+        
+        -- 액세서리 처리 (특별히 더 확인)
         local humanoid = character:FindFirstChildOfClass("Humanoid")
         if humanoid then
             for _, accessory in pairs(humanoid:GetAccessories()) do
                 if accessory:IsA("Accessory") then
-                    local handle = accessory:FindFirstChild("Handle")
-                    if handle and handle:IsA("BasePart") then
-                        -- 액세서리 핸들 저장
-                        if not invisibleParts[handle] then
-                            invisibleParts[handle] = {
-                                Transparency = handle.Transparency,
-                                LocalTransparencyModifier = handle.LocalTransparencyModifier,
-                                Visible = handle.Visible
-                            }
-                        end
-                        handle.Transparency = 1
-                        handle.LocalTransparencyModifier = 0
-                        handle.Visible = true
-                    end
-                    
-                    -- 액세서리의 다른 파트들도 처리
-                    for _, part in pairs(accessory:GetDescendants()) do
-                        if part:IsA("BasePart") and part ~= handle then
-                            if not invisibleParts[part] then
-                                invisibleParts[part] = {
-                                    Transparency = part.Transparency,
-                                    LocalTransparencyModifier = part.LocalTransparencyModifier,
-                                    Visible = part.Visible
-                                }
-                            end
-                            part.Transparency = 1
-                            part.LocalTransparencyModifier = 0
-                            part.Visible = true
-                        end
+                    -- 액세서리의 모든 파트 처리
+                    for _, v in pairs(accessory:GetDescendants()) do
+                        processPart(v)
                     end
                 end
             end
         end
         
-        -- 옷/clothing 처리 (있다면)
-        if character:FindFirstChild("Clothing") then
-            for _, v in pairs(character.Clothing:GetDescendants()) do
-                if v:IsA("BasePart") then
-                    if not invisibleParts[v] then
-                        invisibleParts[v] = {
-                            Transparency = v.Transparency,
-                            LocalTransparencyModifier = v.LocalTransparencyModifier,
-                            Visible = v.Visible
-                        }
-                    end
-                    v.Transparency = 1
-                    v.LocalTransparencyModifier = 0
-                end
-            end
-        end
-        
-        print("[투명핵] 활성화 - 저장된 파트 수: " .. table.count(invisibleParts))
+        print("[투명핵] 활성화 - 저장된 파트 수: " .. tableCount(invisibleParts))
         
     else
-        -- 투명핵 끄기: 저장된 데이터로 정확히 복구
+        -- 투명핵 끄기: 저장된 원래 투명도로 복구
         local restoredCount = 0
         
-        for part, data in pairs(invisibleParts) do
+        for part, originalTransparency in pairs(invisibleParts) do
             if part and part.Parent then  -- 파트가 아직 존재하는지 확인
-                part.Transparency = data.Transparency
-                part.LocalTransparencyModifier = data.LocalTransparencyModifier
-                part.Visible = data.Visible
+                part.Transparency = originalTransparency
+                part.LocalTransparencyModifier = 0  -- 로컬 투명도도 원래대로
                 restoredCount = restoredCount + 1
             end
         end
@@ -391,21 +349,14 @@ local function setupInvisible()
         invisibleParts = {}
         
         print("[투명핵] 비활성화 - 복구된 파트 수: " .. restoredCount)
-        
-        -- 혹시 저장되지 않은 파트가 있다면 기본값으로 복구 (안전장치)
-        local player = game.Players.LocalPlayer
-        local character = player.Character
-        if character then
-            for _, v in pairs(character:GetDescendants()) do
-                if v:IsA("BasePart") then
-                    if v.Transparency == 1 then  -- 아직 투명한 파트가 있다면
-                        v.Transparency = 0
-                        v.LocalTransparencyModifier = 0
-                    end
-                end
-            end
-        end
     end
+end
+
+-- 테이블 크기 계산 함수
+function tableCount(t)
+    local count = 0
+    for _ in pairs(t) do count = count + 1 end
+    return count
 end
 
 ---------------------------------------------------------------------------
@@ -683,7 +634,7 @@ local infiniteJumpToggle = MainTab:CreateToggle({
     end
 })
 
--- 투명인간 섹션 (완전히 개선됨)
+-- 투명인간 섹션 (완전히 수정됨)
 local invisibleSection = MainTab:CreateSection("투명인간")
 
 local invisibleToggle = MainTab:CreateToggle({
@@ -697,7 +648,7 @@ local invisibleToggle = MainTab:CreateToggle({
         if Value then
             Rayfield:Notify({
                 Title = "투명인간",
-                Content = "활성화되었습니다. (완벽한 투명화)",
+                Content = "활성화되었습니다. (상대방과 나에게 안 보임)",
                 Duration = 2
             })
         else
@@ -795,18 +746,11 @@ game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
     end
 end)
 
--- 테이블 크기 계산 함수 (디버그용)
-function table.count(t)
-    local count = 0
-    for _ in pairs(t) do count = count + 1 end
-    return count
-end
-
 ---------------------------------------------------------------------------
 -- 초기화 완료 알림
 ---------------------------------------------------------------------------
 Rayfield:Notify({
     Title = "동혁이 쓰려고 만든 핵",
-    Content = "투명핵이 완벽하게 개선되었습니다!",
+    Content = "투명핵 수정 완료! (상대방과 나에게 안 보임)",
     Duration = 4
 })
