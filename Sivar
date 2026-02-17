@@ -1,176 +1,155 @@
+-- Rayfield 라이브러리 로드
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local Window = Rayfield:CreateWindow({Name="Dong Universe",LoadingTitle="Dong Universe",LoadingSubtitle="v3.0",ConfigurationSaving={Enabled=true,FolderName="DongUniverse",FileName="Config"},KeySystem=false})
-local MainTab = Window:CreateTab("메인","home")
-local TeleportTab = Window:CreateTab("텔레포트","arrow-right")
-local OtherTab = Window:CreateTab("그 외","gamepad-2")
-local InfoTab = Window:CreateTab("정보","info")
 
--- 변수
-local fEnabled,fSpeed,fBV,fConn = false,50
-local sEnabled,sValue,sConn = false,50
-local jEnabled,jValue,jConn = false,50
-local tEnabled,tValue,tConn,tLast = false,50
-local gEnabled,gValue = false,50
-local aimEnabled = false
-local selectedPlayer = nil
+-- Window 생성 (핵 이름: 동혁이 쓰려고 만든 핵) - 키 시스템 완전 제거
+local Window = Rayfield:CreateWindow({
+    Name = "동혁이 쓰려고 만든 핵",
+    LoadingTitle = "동혁이 쓰려고 만든 핵",
+    LoadingSubtitle = "by Rayfield",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "DongHyukHack",
+        FileName = "Config"
+    },
+    Discord = {
+        Enabled = false,
+        Invite = "",
+        RememberJoins = true
+    },
+    KeySystem = false  -- 키 시스템 비활성화
+    -- KeySettings 부분 완전히 제거함
+})
 
--- 함수
-local function gP() local l={}for _,p in pairs(game.Players:GetPlayers())do if p~=game.Players.LocalPlayer then table.insert(l,p.Name)end end return l end
-local function tp(p)local c=game.Players.LocalPlayer.Character;if c and c:FindFirstChild("HumanoidRootPart")then c.HumanoidRootPart.CFrame=CFrame.new(p)return true end return false end
+-- 메인 탭 생성
+local MainTab = Window:CreateTab("메인", "home")
 
--- 플라이
-local function setupFly()
-    local p=game.Players.LocalPlayer;local c=p.Character;if not c then return end
-    local r=c:FindFirstChild("HumanoidRootPart");local h=c:FindFirstChildOfClass("Humanoid")
-    if not r or not h then return end
-    if fEnabled then
-        h.PlatformStand=true;if fBV then fBV:Destroy()end
-        fBV=Instance.new("BodyVelocity");fBV.MaxForce=Vector3.new(1,1,1)*1e9;fBV.Velocity=Vector3.new(0,0,0);fBV.Parent=r
-        if fConn then fConn:Disconnect()end
-        fConn=game:GetService("RunService").Heartbeat:Connect(function()
-            if not(fEnabled and r and r.Parent)then return end
-            local m=Vector3.new(0,0,0);local cam=workspace.CurrentCamera;local uis=game:GetService("UserInputService")
-            if uis:IsKeyDown(Enum.KeyCode.W)then m=m+cam.CFrame.LookVector end
-            if uis:IsKeyDown(Enum.KeyCode.S)then m=m-cam.CFrame.LookVector end
-            if uis:IsKeyDown(Enum.KeyCode.A)then m=m-cam.CFrame.RightVector end
-            if uis:IsKeyDown(Enum.KeyCode.D)then m=m+cam.CFrame.RightVector end
-            if uis:IsKeyDown(Enum.KeyCode.Space)then m=m+Vector3.new(0,1,0)end
-            if uis:IsKeyDown(Enum.KeyCode.LeftControl)then m=m+Vector3.new(0,-1,0)end
-            if m.Magnitude>0 then m=m.Unit*fSpeed end;fBV.Velocity=m
-        end)
-    else
-        if fBV then fBV:Destroy()fBV=nil end;if fConn then fConn:Disconnect()fConn=nil end;if h then h.PlatformStand=false end
-    end
-end
+-- 속도핵 관련 변수
+local speedEnabled = false
+local speedValue = 50
+local originalWalkSpeed = 16
+local speedConnection = nil
 
--- 속도
+-- 속도핵 설정 함수
 local function setupSpeed()
-    local p=game.Players.LocalPlayer;local c=p.Character;if not c then return end
-    local h=c:FindFirstChildOfClass("Humanoid");if not h then return end
-    if sEnabled then
-        h.WalkSpeed=sValue;if sConn then sConn:Disconnect()end
-        sConn=game:GetService("RunService").RenderStepped:Connect(function()
-            if sEnabled and h and h.Parent and h.WalkSpeed~=sValue then h.WalkSpeed=sValue end
-        end)
-    else
-        if sConn then sConn:Disconnect()sConn=nil end;if h and h.Parent then h.WalkSpeed=16 end
-    end
-end
-
--- 점프
-local function setupJump()
-    local p=game.Players.LocalPlayer;local c=p.Character;if not c then return end
-    local h=c:FindFirstChildOfClass("Humanoid");if not h then return end
-    if jEnabled then
-        h.JumpPower=jValue;h.JumpHeight=jValue/10;if jConn then jConn:Disconnect()end
-        jConn=game:GetService("RunService").RenderStepped:Connect(function()
-            if jEnabled and h and h.Parent then
-                if h.JumpPower~=jValue then h.JumpPower=jValue;h.JumpHeight=jValue/10 end
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    if speedEnabled then
+        -- 속도핵 켜기: 설정된 속도 적용
+        humanoid.WalkSpeed = speedValue
+        
+        -- 기존 연결 제거
+        if speedConnection then
+            speedConnection:Disconnect()
+        end
+        
+        -- 속도 유지 (게임이 속도를 변경할 수 있으므로 지속적으로 감시)
+        speedConnection = game:GetService("RunService").RenderStepped:Connect(function()
+            if speedEnabled and humanoid and humanoid.Parent then
+                if humanoid.WalkSpeed ~= speedValue then
+                    humanoid.WalkSpeed = speedValue
+                end
             end
         end)
     else
-        if jConn then jConn:Disconnect()jConn=nil end;if h and h.Parent then h.JumpPower=50;h.JumpHeight=5 end
+        -- 속도핵 끄기: 원래 속도로 복구
+        if speedConnection then
+            speedConnection:Disconnect()
+            speedConnection = nil
+        end
+        
+        if humanoid and humanoid.Parent then
+            humanoid.WalkSpeed = originalWalkSpeed
+        end
     end
 end
 
--- TP워크
-local function setupTP()
-    local p=game.Players.LocalPlayer;local c=p.Character;if not c then return end
-    local r=c:FindFirstChild("HumanoidRootPart");if not r then return end
-    if tEnabled then
-        tLast=r.Position;if tConn then tConn:Disconnect()end
-        tConn=game:GetService("RunService").Heartbeat:Connect(function()
-            if not(tEnabled and r and r.Parent)then return end
-            local cur=r.Position;local dist=(cur-tLast).Magnitude
-            if dist>tValue then local dir=(cur-tLast).Unit;r.CFrame=CFrame.new(tLast+dir*tValue)end
-            tLast=r.Position
-        end)
-    else if tConn then tConn:Disconnect()tConn=nil end;tLast=nil end
-end
+-- 메인 탭에 속도핵 UI 구성
+local speedSection = MainTab:CreateSection("속도핵")
 
--- 에임 TP
-game:GetService("UserInputService").InputBegan:Connect(function(i)
-    if i.KeyCode==Enum.KeyCode.Z and aimEnabled then
-        local m=game.Players.LocalPlayer:GetMouse();if m and m.Hit then tp(m.Hit.p)
-        Rayfield:Notify({Title="에임 TP",Content="이동했습니다",Duration=1})end
+-- 1. 속도핵 켜기/끄기 토글
+local speedToggle = MainTab:CreateToggle({
+    Name = "속도핵 켜기",
+    CurrentValue = false,
+    Flag = "SpeedToggle",
+    Callback = function(Value)
+        speedEnabled = Value
+        setupSpeed()
+        
+        if Value then
+            Rayfield:Notify({
+                Title = "속도핵",
+                Content = "활성화되었습니다. (속도: " .. speedValue .. ")",
+                Duration = 2
+            })
+        else
+            Rayfield:Notify({
+                Title = "속도핵",
+                Content = "비활성화되었습니다.",
+                Duration = 2
+            })
+        end
+    end
+})
+
+-- 2. 현재 속도 표시 (라벨)
+local currentSpeedLabel = MainTab:CreateLabel("현재 속도: 50")
+
+-- 3. 속도 조절 슬라이더 (1 ~ 1000)
+local speedSlider = MainTab:CreateSlider({
+    Name = "속도 조절",
+    Range = {1, 1000},
+    Increment = 1,
+    Suffix = "속도",
+    CurrentValue = 50,
+    Flag = "SpeedSlider",
+    Callback = function(Value)
+        speedValue = Value
+        
+        -- 현재 속도 라벨 업데이트
+        if currentSpeedLabel then
+            currentSpeedLabel:Set("현재 속도: " .. Value)
+        end
+        
+        -- 속도핵이 켜져 있으면 즉시 속도 적용
+        if speedEnabled then
+            local player = game.Players.LocalPlayer
+            local character = player.Character
+            if character then
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    humanoid.WalkSpeed = Value
+                end
+            end
+        end
+    end
+})
+
+-- 캐릭터 변경 시 처리 (리스폰 등)
+game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
+    wait(1)
+    
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    if not humanoid then return end
+    
+    -- 원래 속도 저장
+    originalWalkSpeed = 16
+    
+    -- 속도핵이 켜져 있으면 다시 적용
+    if speedEnabled then
+        wait(0.2)
+        humanoid.WalkSpeed = speedValue
+        setupSpeed() -- 연결도 다시 설정
     end
 end)
 
--- 메인 탭
-MainTab:CreateSection("플라이")
-local fT=MainTab:CreateToggle({Name="플라이",CurrentValue=false,Flag="FT",Callback=function(v)fEnabled=v;setupFly()end})
-MainTab:CreateSlider({Name="플라이 속도",Range={1,2000},Increment=1,CurrentValue=50,Flag="FS",Callback=function(v)fSpeed=v end})
-
-MainTab:CreateSection("속도")
-local sT=MainTab:CreateToggle({Name="속도",CurrentValue=false,Flag="ST",Callback=function(v)sEnabled=v;setupSpeed()Rayfield:Notify({Title="속도",Content=v and"활성화"or"비활성화",Duration=1})end})
-MainTab:CreateSlider({Name="속도 값",Range={1,2000},Increment=1,CurrentValue=50,Flag="SV",Callback=function(v)sValue=v;if sEnabled then local h=game.Players.LocalPlayer.Character;if h then h=h:FindFirstChildOfClass("Humanoid")if h then h.WalkSpeed=v end end end end})
-
-MainTab:CreateSection("점프")
-local jT=MainTab:CreateToggle({Name="점프",CurrentValue=false,Flag="JT",Callback=function(v)jEnabled=v;setupJump()Rayfield:Notify({Title="점프",Content=v and"활성화"or"비활성화",Duration=1})end})
-MainTab:CreateSlider({Name="점프력",Range={1,500},Increment=1,CurrentValue=50,Flag="JV",Callback=function(v)jValue=v;if jEnabled then local h=game.Players.LocalPlayer.Character;if h then h=h:FindFirstChildOfClass("Humanoid")if h then h.JumpPower=v;h.JumpHeight=v/10 end end end end})
-
-MainTab:CreateSection("TP워크")
-local tT=MainTab:CreateToggle({Name="TP워크",CurrentValue=false,Flag="TT",Callback=function(v)tEnabled=v;setupTP()Rayfield:Notify({Title="TP워크",Content=v and"활성화"or"비활성화",Duration=1})end})
-MainTab:CreateSlider({Name="TP워크 속도",Range={1,2000},Increment=1,CurrentValue=50,Flag="TV",Callback=function(v)tValue=v end})
-
-MainTab:CreateSection("중력")
-local gT=MainTab:CreateToggle({Name="중력",CurrentValue=false,Flag="GT",Callback=function(v)gEnabled=v;workspace.Gravity=v and gValue or 196.2 end})
-MainTab:CreateSlider({Name="중력 값",Range={0,100},Increment=1,CurrentValue=50,Flag="GV",Callback=function(v)gValue=v;if gEnabled then workspace.Gravity=v end end})
-
--- 텔레포트 탭
-TeleportTab:CreateSection("에임 TP")
-local aT=TeleportTab:CreateToggle({Name="에임 TP (Z)",CurrentValue=false,Flag="AT",Callback=function(v)aimEnabled=v end})
-
-TeleportTab:CreateSection("위치 TP")
-TeleportTab:CreateButton({Name="하늘로(500)",Callback=function()local c=game.Players.LocalPlayer.Character;if c and c:FindFirstChild("HumanoidRootPart")then tp(c.HumanoidRootPart.Position+Vector3.new(0,500,0))end end})
-TeleportTab:CreateButton({Name="땅으로",Callback=function()local c=game.Players.LocalPlayer.Character;if c and c:FindFirstChild("HumanoidRootPart")then
-    local r=c.HumanoidRootPart;local h,pos=workspace:FindPartOnRay(Ray.new(r.Position+Vector3.new(0,10,0),Vector3.new(0,-1000,0)),c)
-    if pos then tp(pos+Vector3.new(0,3,0))end
-end end})
-TeleportTab:CreateButton({Name="스폰으로",Callback=function()local s=workspace:FindFirstChild("SpawnLocation")or workspace:FindFirstChild("Spawn");tp(s and s.Position+Vector3.new(0,3,0)or Vector3.new(0,50,0))end})
-
-TeleportTab:CreateSection("플레이어 TP")
-TeleportTab:CreateButton({Name="🔄 새로고침",Callback=function()if d then d:Set(gP())end Rayfield:Notify({Title="새로고침",Content=#gP().."명",Duration=1})end})
-local d=TeleportTab:CreateDropdown({Name="플레이어 선택",Options=gP(),CurrentOption="",Flag="PD",Callback=function(o)selectedPlayer=o end})
-TeleportTab:CreateButton({Name="⚡ 선택한 플레이어에게 TP",Callback=function()
-    if not selectedPlayer then Rayfield:Notify({Title="오류",Content="플레이어 선택 필요",Duration=1.5})return end
-    local t=game.Players:FindFirstChild(selectedPlayer);if not t then Rayfield:Notify({Title="오류",Content="플레이어 없음",Duration=1.5})return end
-    local tc=t.Character;if not tc then Rayfield:Notify({Title="오류",Content="캐릭터 없음",Duration=1.5})return end
-    local tr=tc:FindFirstChild("HumanoidRootPart");if not tr then Rayfield:Notify({Title="오류",Content="위치 없음",Duration=1.5})return end
-    wait(0.1);if tp(tr.Position+Vector3.new(0,3,0))then Rayfield:Notify({Title="성공",Content=selectedPlayer.."에게 이동",Duration=1.5})end
-end})
-
-spawn(function()while wait(3)do if d then d:Set(gP())end end end)
-
--- 그 외 탭
-OtherTab:CreateSection("기타")
-OtherTab:CreateButton({Name="서버 링크 복사",Callback=function()setclipboard(string.format("https://www.roblox.com/games/%d?privateServerLinkCode=%s",game.PlaceId,game.JobId))Rayfield:Notify({Title="복사됨",Content="링크 복사 완료",Duration=1.5})end})
-OtherTab:CreateButton({Name="게임 ID 복사",Callback=function()setclipboard(tostring(game.GameId))Rayfield:Notify({Title="복사됨",Content="ID: "..game.GameId,Duration=1.5})end})
-OtherTab:CreateButton({Name="캐릭터 리스폰",Callback=function()local h=game.Players.LocalPlayer.Character;if h then h=h:FindFirstChildOfClass("Humanoid")if h then h.Health=0 end end end})
-OtherTab:CreateButton({Name="모든 기능 끄기",Callback=function()
-    fEnabled=false;setupFly();sEnabled=false;setupSpeed();jEnabled=false;setupJump();tEnabled=false;setupTP();gEnabled=false;workspace.Gravity=196.2;aimEnabled=false
-    fT:Set(false);sT:Set(false);jT:Set(false);tT:Set(false);gT:Set(false);aT:Set(false)
-    Rayfield:Notify({Title="초기화",Content="모든 기능 OFF",Duration=1.5})
-end})
-
--- 정보 탭
-InfoTab:CreateSection("정보")
-InfoTab:CreateLabel("Dong Universe v3.0")
-InfoTab:CreateLabel("모든 기능 작동")
-InfoTab:CreateSection("계정")
-local p=game.Players.LocalPlayer
-InfoTab:CreateLabel("ID: "..p.UserId)
-InfoTab:CreateLabel("나이: "..p.AccountAge.."일")
-InfoTab:CreateLabel("이름: "..p.Name)
-
--- 캐릭터 변경
-game.Players.LocalPlayer.CharacterAdded:Connect(function(c)wait(1)
-    local h=c:WaitForChild("Humanoid",5);local r=c:WaitForChild("HumanoidRootPart",5)
-    if not h or not r then return end
-    if fEnabled then wait(0.2)setupFly()end
-    if sEnabled then wait(0.2)h.WalkSpeed=sValue;setupSpeed()end
-    if tEnabled then wait(0.2)setupTP()end
-    if jEnabled then wait(0.2)h.JumpPower=jValue;h.JumpHeight=jValue/10;setupJump()end
-end)
-
-Rayfield:Notify({Title="Dong Universe",Content="로드 완료! (v3.0)",Duration=2})
+-- 초기화 완료 알림
+Rayfield:Notify({
+    Title = "동혁이 쓰려고 만든 핵",
+    Content = "메인 탭 - 속도핵이 로드되었습니다. (키 없음)",
+    Duration = 3
+})
