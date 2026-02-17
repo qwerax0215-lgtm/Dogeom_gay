@@ -17,13 +17,14 @@ local Window = Rayfield:CreateWindow({
         RememberJoins = true
     },
     KeySystem = false  -- 키 시스템 비활성화
-    -- KeySettings 부분 완전히 제거함
 })
 
 -- 메인 탭 생성
 local MainTab = Window:CreateTab("메인", "home")
 
--- 속도핵 관련 변수
+---------------------------------------------------------------------------
+-- 속도핵 관련 변수 및 함수
+---------------------------------------------------------------------------
 local speedEnabled = false
 local speedValue = 50
 local originalWalkSpeed = 16
@@ -68,12 +69,66 @@ local function setupSpeed()
     end
 end
 
--- 메인 탭에 속도핵 UI 구성
+---------------------------------------------------------------------------
+-- 점프핵 관련 변수 및 함수
+---------------------------------------------------------------------------
+local jumpEnabled = false
+local jumpValue = 50
+local originalJumpPower = 50
+local jumpConnection = nil
+
+-- 점프핵 설정 함수
+local function setupJump()
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    if jumpEnabled then
+        -- 점프핵 켜기: 설정된 점프력 적용
+        humanoid.JumpPower = jumpValue
+        humanoid.JumpHeight = jumpValue / 10  -- JumpHeight도 함께 설정
+        
+        -- 기존 연결 제거
+        if jumpConnection then
+            jumpConnection:Disconnect()
+        end
+        
+        -- 점프력 유지 (게임이 변경할 수 있으므로 지속적으로 감시)
+        jumpConnection = game:GetService("RunService").RenderStepped:Connect(function()
+            if jumpEnabled and humanoid and humanoid.Parent then
+                if humanoid.JumpPower ~= jumpValue then
+                    humanoid.JumpPower = jumpValue
+                    humanoid.JumpHeight = jumpValue / 10
+                end
+            end
+        end)
+    else
+        -- 점프핵 끄기: 원래 점프력으로 복구
+        if jumpConnection then
+            jumpConnection:Disconnect()
+            jumpConnection = nil
+        end
+        
+        if humanoid and humanoid.Parent then
+            humanoid.JumpPower = originalJumpPower
+            humanoid.JumpHeight = originalJumpPower / 10
+        end
+    end
+end
+
+---------------------------------------------------------------------------
+-- 메인 탭 UI 구성
+---------------------------------------------------------------------------
+
+-- 속도핵 섹션
 local speedSection = MainTab:CreateSection("속도핵")
 
--- 1. 속도핵 켜기/끄기 토글
+-- 1. 속도핵 토글 (이름을 "속도핵"으로 변경)
 local speedToggle = MainTab:CreateToggle({
-    Name = "속도핵 켜기",
+    Name = "속도핵",
     CurrentValue = false,
     Flag = "SpeedToggle",
     Callback = function(Value)
@@ -96,10 +151,10 @@ local speedToggle = MainTab:CreateToggle({
     end
 })
 
--- 2. 현재 속도 표시 (라벨)
+-- 2. 현재 속도 표시 라벨
 local currentSpeedLabel = MainTab:CreateLabel("현재 속도: 50")
 
--- 3. 속도 조절 슬라이더 (1 ~ 1000)
+-- 3. 속도 조절 슬라이더
 local speedSlider = MainTab:CreateSlider({
     Name = "속도 조절",
     Range = {1, 1000},
@@ -129,7 +184,71 @@ local speedSlider = MainTab:CreateSlider({
     end
 })
 
+-- 점프핵 섹션
+local jumpSection = MainTab:CreateSection("점프핵")
+
+-- 1. 점프핵 토글
+local jumpToggle = MainTab:CreateToggle({
+    Name = "점프핵",
+    CurrentValue = false,
+    Flag = "JumpToggle",
+    Callback = function(Value)
+        jumpEnabled = Value
+        setupJump()
+        
+        if Value then
+            Rayfield:Notify({
+                Title = "점프핵",
+                Content = "활성화되었습니다. (점프력: " .. jumpValue .. ")",
+                Duration = 2
+            })
+        else
+            Rayfield:Notify({
+                Title = "점프핵",
+                Content = "비활성화되었습니다.",
+                Duration = 2
+            })
+        end
+    end
+})
+
+-- 2. 현재 점프력 표시 라벨
+local currentJumpLabel = MainTab:CreateLabel("현재 점프력: 50")
+
+-- 3. 점프력 조절 슬라이더 (1 ~ 1000)
+local jumpSlider = MainTab:CreateSlider({
+    Name = "점프력 조절",
+    Range = {1, 1000},
+    Increment = 1,
+    Suffix = "점프력",
+    CurrentValue = 50,
+    Flag = "JumpSlider",
+    Callback = function(Value)
+        jumpValue = Value
+        
+        -- 현재 점프력 라벨 업데이트
+        if currentJumpLabel then
+            currentJumpLabel:Set("현재 점프력: " .. Value)
+        end
+        
+        -- 점프핵이 켜져 있으면 즉시 점프력 적용
+        if jumpEnabled then
+            local player = game.Players.LocalPlayer
+            local character = player.Character
+            if character then
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    humanoid.JumpPower = Value
+                    humanoid.JumpHeight = Value / 10
+                end
+            end
+        end
+    end
+})
+
+---------------------------------------------------------------------------
 -- 캐릭터 변경 시 처리 (리스폰 등)
+---------------------------------------------------------------------------
 game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
     wait(1)
     
@@ -143,13 +262,23 @@ game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
     if speedEnabled then
         wait(0.2)
         humanoid.WalkSpeed = speedValue
-        setupSpeed() -- 연결도 다시 설정
+        setupSpeed()
+    end
+    
+    -- 점프핵이 켜져 있으면 다시 적용
+    if jumpEnabled then
+        wait(0.2)
+        humanoid.JumpPower = jumpValue
+        humanoid.JumpHeight = jumpValue / 10
+        setupJump()
     end
 end)
 
+---------------------------------------------------------------------------
 -- 초기화 완료 알림
+---------------------------------------------------------------------------
 Rayfield:Notify({
     Title = "동혁이 쓰려고 만든 핵",
-    Content = "메인 탭 - 속도핵이 로드되었습니다. (키 없음)",
+    Content = "메인 탭 - 속도핵 & 점프핵이 로드되었습니다.",
     Duration = 3
 })
