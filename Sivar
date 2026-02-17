@@ -191,23 +191,21 @@ local function setupFly()
 end
 
 ---------------------------------------------------------------------------
--- 벽뚫핵 관련 변수 및 함수 (수정됨 - 변수 충돌 해결)
+-- 벽뚫핵 관련 변수 및 함수
 ---------------------------------------------------------------------------
 local noclipEnabled = false
 local noclipConnection = nil
-local noclipParts = {}  -- 원래 CanCollide 값 저장용
+local noclipParts = {}
 
 local function setupNoclip()
     local player = game.Players.LocalPlayer
     local character = player.Character
     
     if noclipEnabled then
-        -- 벽뚫핵 켜기
         if noclipConnection then
             noclipConnection:Disconnect()
         end
         
-        -- 현재 파트들의 CanCollide 값 저장
         if character then
             for _, v in pairs(character:GetDescendants()) do
                 if v:IsA("BasePart") then
@@ -230,7 +228,6 @@ local function setupNoclip()
             end
         end)
     else
-        -- 벽뚫핵 끄기 - 저장된 값으로 복구
         if noclipConnection then
             noclipConnection:Disconnect()
             noclipConnection = nil
@@ -241,7 +238,6 @@ local function setupNoclip()
         if character then
             for _, v in pairs(character:GetDescendants()) do
                 if v:IsA("BasePart") then
-                    -- 저장된 값이 있으면 그 값으로, 없으면 true로 복구
                     if noclipParts[v] ~= nil then
                         v.CanCollide = noclipParts[v]
                     else
@@ -251,7 +247,6 @@ local function setupNoclip()
             end
         end
         
-        -- 저장된 테이블 초기화
         noclipParts = {}
     end
 end
@@ -289,11 +284,10 @@ local function setupInfiniteJump()
 end
 
 ---------------------------------------------------------------------------
--- 투명인간 관련 변수 및 함수
+-- 투명인간 관련 변수 및 함수 (완전히 개선됨)
 ---------------------------------------------------------------------------
 local invisibleEnabled = false
-local invisibleOriginalTransparency = {}
-local invisibleOriginalLocalTransparency = {}
+local invisibleParts = {}  -- 모든 파트의 원본 데이터 저장
 
 local function setupInvisible()
     local player = game.Players.LocalPlayer
@@ -301,51 +295,116 @@ local function setupInvisible()
     if not character then return end
     
     if invisibleEnabled then
+        -- 투명핵 켜기: 모든 파트의 현재 상태 저장 후 투명하게
+        invisibleParts = {}  -- 초기화
+        
+        -- 캐릭터의 모든 파트 수집 (몸통, 팔, 다리, 머리 등)
         for _, v in pairs(character:GetDescendants()) do
             if v:IsA("BasePart") or v:IsA("MeshPart") or v:IsA("Part") then
-                if not invisibleOriginalTransparency[v] then
-                    invisibleOriginalTransparency[v] = v.Transparency
-                end
+                -- 각 파트의 원본 데이터 저장
+                invisibleParts[v] = {
+                    Transparency = v.Transparency,
+                    LocalTransparencyModifier = v.LocalTransparencyModifier,
+                    Visible = v.Visible
+                }
+                
+                -- 투명하게 설정 (다른 플레이어에게 안 보임)
                 v.Transparency = 1
-            end
-        end
-        
-        for _, v in pairs(character:GetDescendants()) do
-            if v:IsA("BasePart") or v:IsA("MeshPart") or v:IsA("Part") then
-                if not invisibleOriginalLocalTransparency[v] then
-                    invisibleOriginalLocalTransparency[v] = v.LocalTransparencyModifier
-                end
+                -- 로컬에서는 보이게 (선택사항, 0으로 두면 나에게는 보임)
                 v.LocalTransparencyModifier = 0
+                v.Visible = true
             end
         end
         
+        -- 액세서리(모자, 가방 등) 처리
         local humanoid = character:FindFirstChildOfClass("Humanoid")
         if humanoid then
             for _, accessory in pairs(humanoid:GetAccessories()) do
                 if accessory:IsA("Accessory") then
                     local handle = accessory:FindFirstChild("Handle")
-                    if handle then
-                        if not invisibleOriginalTransparency[handle] then
-                            invisibleOriginalTransparency[handle] = handle.Transparency
+                    if handle and handle:IsA("BasePart") then
+                        -- 액세서리 핸들 저장
+                        if not invisibleParts[handle] then
+                            invisibleParts[handle] = {
+                                Transparency = handle.Transparency,
+                                LocalTransparencyModifier = handle.LocalTransparencyModifier,
+                                Visible = handle.Visible
+                            }
                         end
                         handle.Transparency = 1
+                        handle.LocalTransparencyModifier = 0
+                        handle.Visible = true
+                    end
+                    
+                    -- 액세서리의 다른 파트들도 처리
+                    for _, part in pairs(accessory:GetDescendants()) do
+                        if part:IsA("BasePart") and part ~= handle then
+                            if not invisibleParts[part] then
+                                invisibleParts[part] = {
+                                    Transparency = part.Transparency,
+                                    LocalTransparencyModifier = part.LocalTransparencyModifier,
+                                    Visible = part.Visible
+                                }
+                            end
+                            part.Transparency = 1
+                            part.LocalTransparencyModifier = 0
+                            part.Visible = true
+                        end
                     end
                 end
             end
         end
+        
+        -- 옷/clothing 처리 (있다면)
+        if character:FindFirstChild("Clothing") then
+            for _, v in pairs(character.Clothing:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    if not invisibleParts[v] then
+                        invisibleParts[v] = {
+                            Transparency = v.Transparency,
+                            LocalTransparencyModifier = v.LocalTransparencyModifier,
+                            Visible = v.Visible
+                        }
+                    end
+                    v.Transparency = 1
+                    v.LocalTransparencyModifier = 0
+                end
+            end
+        end
+        
+        print("[투명핵] 활성화 - 저장된 파트 수: " .. table.count(invisibleParts))
+        
     else
-        for part, transparency in pairs(invisibleOriginalTransparency) do
-            if part and part.Parent then
-                part.Transparency = transparency
+        -- 투명핵 끄기: 저장된 데이터로 정확히 복구
+        local restoredCount = 0
+        
+        for part, data in pairs(invisibleParts) do
+            if part and part.Parent then  -- 파트가 아직 존재하는지 확인
+                part.Transparency = data.Transparency
+                part.LocalTransparencyModifier = data.LocalTransparencyModifier
+                part.Visible = data.Visible
+                restoredCount = restoredCount + 1
             end
         end
-        for part, localTrans in pairs(invisibleOriginalLocalTransparency) do
-            if part and part.Parent then
-                part.LocalTransparencyModifier = localTrans
+        
+        -- 저장된 데이터 초기화
+        invisibleParts = {}
+        
+        print("[투명핵] 비활성화 - 복구된 파트 수: " .. restoredCount)
+        
+        -- 혹시 저장되지 않은 파트가 있다면 기본값으로 복구 (안전장치)
+        local player = game.Players.LocalPlayer
+        local character = player.Character
+        if character then
+            for _, v in pairs(character:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    if v.Transparency == 1 then  -- 아직 투명한 파트가 있다면
+                        v.Transparency = 0
+                        v.LocalTransparencyModifier = 0
+                    end
+                end
             end
         end
-        invisibleOriginalTransparency = {}
-        invisibleOriginalLocalTransparency = {}
     end
 end
 
@@ -570,7 +629,7 @@ local jumpSlider = MainTab:CreateSlider({
     end
 })
 
--- 벽뚫핵 섹션 (수정됨)
+-- 벽뚫핵 섹션
 local noclipSection = MainTab:CreateSection("벽뚫핵")
 
 local noclipToggle = MainTab:CreateToggle({
@@ -590,7 +649,7 @@ local noclipToggle = MainTab:CreateToggle({
         else
             Rayfield:Notify({
                 Title = "벽뚫핵",
-                Content = "비활성화되었습니다. (원래 상태로 복구)",
+                Content = "비활성화되었습니다.",
                 Duration = 2
             })
         end
@@ -624,7 +683,7 @@ local infiniteJumpToggle = MainTab:CreateToggle({
     end
 })
 
--- 투명인간 섹션
+-- 투명인간 섹션 (완전히 개선됨)
 local invisibleSection = MainTab:CreateSection("투명인간")
 
 local invisibleToggle = MainTab:CreateToggle({
@@ -638,13 +697,13 @@ local invisibleToggle = MainTab:CreateToggle({
         if Value then
             Rayfield:Notify({
                 Title = "투명인간",
-                Content = "활성화되었습니다. (다른 플레이어에게 안 보임)",
+                Content = "활성화되었습니다. (완벽한 투명화)",
                 Duration = 2
             })
         else
             Rayfield:Notify({
                 Title = "투명인간",
-                Content = "비활성화되었습니다.",
+                Content = "비활성화되었습니다. (원래대로 복구)",
                 Duration = 2
             })
         end
@@ -711,7 +770,7 @@ game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
         setupFly()
     end
     
-    -- 벽뚫핵 재적용 (수정됨)
+    -- 벽뚫핵 재적용
     if noclipEnabled then
         wait(0.2)
         setupNoclip()
@@ -736,11 +795,18 @@ game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
     end
 end)
 
+-- 테이블 크기 계산 함수 (디버그용)
+function table.count(t)
+    local count = 0
+    for _ in pairs(t) do count = count + 1 end
+    return count
+end
+
 ---------------------------------------------------------------------------
 -- 초기화 완료 알림
 ---------------------------------------------------------------------------
 Rayfield:Notify({
     Title = "동혁이 쓰려고 만든 핵",
-    Content = "벽뚫핵 수정 완료! (껐다 켜도 이상해지지 않음)",
+    Content = "투명핵이 완벽하게 개선되었습니다!",
     Duration = 4
 })
