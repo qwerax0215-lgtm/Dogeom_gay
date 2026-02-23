@@ -1,73 +1,103 @@
-local R=loadstring(game:HttpGet('https://sirius.menu/rayfield'))()local W=R:CreateWindow({Name="동혁이 쓰려고 만든 핵",LoadingTitle="동혁이 쓰려고 만든 핵",LoadingSubtitle="by Rayfield",ConfigurationSaving={Enabled=true,FolderName="DongHyukHack",FileName="Config"},Discord={Enabled=false,Invite="",RememberJoins=true},KeySystem=false})local M=W:CreateTab("메인","home")
-local tCount=function(t)local c=0 for _ in pairs(t)do c=c+1 end return c end
-local function gParts(c)local p={}for _,v in pairs(c:GetDescendants())do if v:IsA"BasePart"or v:IsA"MeshPart"or v:IsA"Part"then table.insert(p,v)end end
-local h=c:FindFirstChildOfClass"Humanoid"if h then for _,a in pairs(h:GetAccessories())do if a:IsA"Accessory"then for _,v in pairs(a:GetDescendants())do if v:IsA"BasePart"or v:IsA"MeshPart"or v:IsA"Part"then table.insert(p,v)end end end end end return p end
-local function dCon(c)if c then c:Disconnect()c=nil end end
-local function dIns(i)if i then i:Destroy()i=nil end end
-local sE,sV,sO,sC=false,50,16
-local function sS()local p=game.Players.LocalPlayer;local c=p.Character;if not c then return end;local h=c:FindFirstChildOfClass"Humanoid"if not h then return end
-if sE then h.WalkSpeed=sV;dCon(sC);sC=game:GetService("RunService").RenderStepped:Connect(function()if sE and h and h.Parent and h.WalkSpeed~=sV then h.WalkSpeed=sV end end)
-else dCon(sC)if h and h.Parent then h.WalkSpeed=sO end end end
-local jE,jV,jO,jC=false,50,50
-local function jS()local p=game.Players.LocalPlayer;local c=p.Character;if not c then return end;local h=c:FindFirstChildOfClass"Humanoid"if not h then return end
-if jE then h.JumpPower=jV;h.JumpHeight=jV/10;dCon(jC);jC=game:GetService("RunService").RenderStepped:Connect(function()if jE and h and h.Parent then if h.JumpPower~=jV then h.JumpPower=jV;h.JumpHeight=jV/10 end end end)
-else dCon(jC)if h and h.Parent then h.JumpPower=jO;h.JumpHeight=jO/10 end end end
-local fE,fV,fBV,fC=false,50
-local function fS()local p=game.Players.LocalPlayer;local c=p.Character;if not c then return end;local h=c:FindFirstChildOfClass"Humanoid"local r=c:FindFirstChild"HumanoidRootPart"if not h or not r then return end
-if fE then h.PlatformStand=true;dIns(fBV);fBV=Instance.new("BodyVelocity");fBV.MaxForce=Vector3.new(1,1,1)*1e9;fBV.Velocity=Vector3.new(0,0,0);fBV.Parent=r;dCon(fC)
-fC=game:GetService("RunService").Heartbeat:Connect(function()if not(fE and r and r.Parent and fBV)then return end;local m=Vector3.new(0,0,0);local cam=workspace.CurrentCamera;local u=game:GetService"UserInputService"
-if u:IsKeyDown(Enum.KeyCode.W)then m=m+cam.CFrame.LookVector end
-if u:IsKeyDown(Enum.KeyCode.S)then m=m-cam.CFrame.LookVector end
-if u:IsKeyDown(Enum.KeyCode.A)then m=m-cam.CFrame.RightVector end
-if u:IsKeyDown(Enum.KeyCode.D)then m=m+cam.CFrame.RightVector end
-if u:IsKeyDown(Enum.KeyCode.Space)then m=m+Vector3.new(0,1,0)end
-if u:IsKeyDown(Enum.KeyCode.LeftControl)then m=m+Vector3.new(0,-1,0)end
-if m.Magnitude>0 then m=m.Unit*fV end;fBV.Velocity=m end)
-else dIns(fBV);dCon(fC)if h then h.PlatformStand=false end end end
-local nE,nC,nP=false
-local function nS()local p=game.Players.LocalPlayer;local c=p.Character
-if nE then dCon(nC)if c then local ps=gParts(c)for _,v in ipairs(ps)do nP[v]=v.CanCollide end end
-nC=game:GetService("RunService").Stepped:Connect(function()if nE then local p=game.Players.LocalPlayer;local c=p.Character;if c then for _,v in ipairs(gParts(c))do v.CanCollide=false end end end end)
-else dCon(nC)local p=game.Players.LocalPlayer;local c=p.Character;if c then for _,v in ipairs(gParts(c))do v.CanCollide=nP[v]~=nil and nP[v]or true end end;nP={}end end
-local iE,iC=false
-local function iS()local p=game.Players.LocalPlayer;local c=p.Character;if not c then print"[무한점프] 캐릭터 없음"return end;local h=c:FindFirstChildOfClass"Humanoid"if not h then return end
-if iE then dCon(iC);iC=game:GetService("UserInputService").JumpRequest:Connect(function()if iE and h and h.Parent then h:ChangeState(Enum.HumanoidStateType.Jumping)end end)
-else dCon(iC)end end
-local vE,vP=false,{}
-local function vS()local p=game.Players.LocalPlayer;local c=p.Character;if not c then print"[투명핵] 캐릭터 없음"return end
-if vE then vP={}local ps=gParts(c)for _,v in ipairs(ps)do vP[v]=v.Transparency;v.Transparency=1;v.LocalTransparencyModifier=1 end print("[투명핵] 활성화 - 저장된 파트 수: "..#ps)
-else local r=0 for v,o in pairs(vP)do if v and v.Parent then v.Transparency=o;v.LocalTransparencyModifier=0;r=r+1 end end;vP={}print("[투명핵] 비활성화 - 복구된 파트 수: "..r)end end
-local zE,zP,zBP,zC=false
-local function zS()local p=game.Players.LocalPlayer;local c=p.Character;if not c then return end;local r=c:FindFirstChild"HumanoidRootPart"local h=c:FindFirstChildOfClass"Humanoid"if not r or not h then return end
-if zE then zP=r.Position;dIns(zBP);zBP=Instance.new("BodyPosition");zBP.MaxForce=Vector3.new(math.huge,math.huge,math.huge);zBP.P=10000;zBP.D=100;zBP.Position=zP;zBP.Parent=r;dCon(zC)
-zC=game:GetService("RunService").Heartbeat:Connect(function()if zE and r and r.Parent and zBP then zBP.Position=zP end end);h.PlatformStand=true
-else dIns(zBP);dCon(zC);if h then h.PlatformStand=false end;zP=nil end end
-M:CreateSection("속도핵")
-local sT=M:CreateToggle({Name="속도핵",CurrentValue=false,Flag="ST",Callback=function(v)sE=v;sS()if v then R:Notify({Title="속도핵",Content="활성화 ("..sV..")",Duration=2})else R:Notify({Title="속도핵",Content="비활성화",Duration=2})end end})
-local sL=M:CreateLabel("현재 속도: 50")
-M:CreateSlider({Name="속도 조절",Range={1,1000},Increment=1,CurrentValue=50,Flag="SS",Callback=function(v)sV=v;sL:Set("현재 속도: "..v)if sE then local p=game.Players.LocalPlayer;local c=p.Character;if c then local h=c:FindFirstChildOfClass"Humanoid"if h then h.WalkSpeed=v end end end end})
-M:CreateSection("플라이핵")
-local fT=M:CreateToggle({Name="플라이핵",CurrentValue=false,Flag="FT",Callback=function(v)fE=v;fS()if v then R:Notify({Title="플라이핵",Content="활성화 (WASD+스페이스/컨트롤)",Duration=2})else R:Notify({Title="플라이핵",Content="비활성화",Duration=2})end end})
-local fL=M:CreateLabel("현재 플라이 속도: 50")
-M:CreateSlider({Name="플라이 속도 조절",Range={1,1000},Increment=1,CurrentValue=50,Flag="FS",Callback=function(v)fV=v;fL:Set("현재 플라이 속도: "..v)end})
-M:CreateSection("점프핵")
-local jT=M:CreateToggle({Name="점프핵",CurrentValue=false,Flag="JT",Callback=function(v)jE=v;jS()if v then R:Notify({Title="점프핵",Content="활성화 ("..jV..")",Duration=2})else R:Notify({Title="점프핵",Content="비활성화",Duration=2})end end})
-local jL=M:CreateLabel("현재 점프력: 50")
-M:CreateSlider({Name="점프력 조절",Range={1,1000},Increment=1,CurrentValue=50,Flag="JS",Callback=function(v)jV=v;jL:Set("현재 점프력: "..v)if jE then local p=game.Players.LocalPlayer;local c=p.Character;if c then local h=c:FindFirstChildOfClass"Humanoid"if h then h.JumpPower=v;h.JumpHeight=v/10 end end end end})
-M:CreateSection("벽뚫핵")
-local nT=M:CreateToggle({Name="벽뚫핵",CurrentValue=false,Flag="NT",Callback=function(v)nE=v;nS()if v then R:Notify({Title="벽뚫핵",Content="활성화",Duration=2})else R:Notify({Title="벽뚫핵",Content="비활성화",Duration=2})end end})
-M:CreateSection("무한점프")
-local iT=M:CreateToggle({Name="무한점프",CurrentValue=false,Flag="IT",Callback=function(v)iE=v;iS()if v then R:Notify({Title="무한점프",Content="활성화",Duration=2})else R:Notify({Title="무한점프",Content="비활성화",Duration=2})end end})
-M:CreateSection("투명인간")
-local vT=M:CreateToggle({Name="투명인간",CurrentValue=false,Flag="VT",Callback=function(v)vE=v;vS()if v then R:Notify({Title="투명인간",Content="활성화 (상대방과 나에게 안 보임)",Duration=2})else R:Notify({Title="투명인간",Content="비활성화",Duration=2})end end})
-M:CreateSection("프리즈 핵")
-local zT=M:CreateToggle({Name="프리즈",CurrentValue=false,Flag="ZT",Callback=function(v)zE=v;zS()if v then R:Notify({Title="프리즈 핵",Content="활성화 (고정)",Duration=2})else R:Notify({Title="프리즈 핵",Content="비활성화",Duration=2})end end})
-game.Players.LocalPlayer.CharacterAdded:Connect(function(c)wait(1)local h=c:WaitForChild("Humanoid",5)if not h then return end;sO=16
-if sE then wait(0.2)h.WalkSpeed=sV;sS()end
-if jE then wait(0.2)h.JumpPower=jV;h.JumpHeight=jV/10;jS()end
-if fE then wait(0.2)fS()end
-if nE then wait(0.2)nS()end
-if iE then wait(0.2)iS()end
-if vE then wait(0.2)vS()end
-if zE then wait(0.2)zS()end end)
-R:Notify({Title="동혁이 쓰려고 만든 핵",Content="최적화 완료! (길이 축소)",Duration=4})
+-- Rayfield 라이브러리 로드
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- Window 생성 (에임 TP 전용 핵)
+local Window = Rayfield:CreateWindow({
+    Name = "에임 TP 핵",
+    LoadingTitle = "에임 TP 핵",
+    LoadingSubtitle = "Z 키로 순간이동",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "AimTPHack",
+        FileName = "Config"
+    },
+    Discord = {
+        Enabled = false,
+        Invite = "",
+        RememberJoins = true
+    },
+    KeySystem = false
+})
+
+-- 메인 탭 생성
+local MainTab = Window:CreateTab("메인", "home")
+
+-- 에임 TP 관련 변수
+local aimTPEnabled = false
+
+-- 텔레포트 함수
+local function teleportToMouse()
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    if not character then return false end
+    
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return false end
+    
+    local mouse = player:GetMouse()
+    if not mouse or not mouse.Hit then return false end
+    
+    -- 마우스 위치로 순간이동
+    rootPart.CFrame = CFrame.new(mouse.Hit.p)
+    return true
+end
+
+-- Z 키 입력 처리
+game:GetService("UserInputService").InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Z and aimTPEnabled then
+        if teleportToMouse() then
+            Rayfield:Notify({
+                Title = "에임 TP",
+                Content = "마우스 위치로 순간이동했습니다",
+                Duration = 1
+            })
+        else
+            Rayfield:Notify({
+                Title = "에임 TP",
+                Content = "순간이동 실패 (캐릭터 없음)",
+                Duration = 1.5
+            })
+        end
+    end
+end)
+
+-- 메인 탭 UI
+MainTab:CreateSection("에임 TP 설정")
+
+-- 에임 TP 토글
+local aimTPToggle = MainTab:CreateToggle({
+    Name = "에임 TP",
+    CurrentValue = false,
+    Flag = "AimTPToggle",
+    Callback = function(Value)
+        aimTPEnabled = Value
+        if Value then
+            Rayfield:Notify({
+                Title = "에임 TP",
+                Content = "활성화되었습니다. Z 키를 눌러 순간이동하세요",
+                Duration = 2
+            })
+        else
+            Rayfield:Notify({
+                Title = "에임 TP",
+                Content = "비활성화되었습니다",
+                Duration = 1.5
+            })
+        end
+    end
+})
+
+-- 사용법 안내
+MainTab:CreateLabel("")
+MainTab:CreateLabel("📌 사용 방법")
+MainTab:CreateLabel("1. '에임 TP' 토글을 켜세요")
+MainTab:CreateLabel("2. Z 키를 누르면 마우스 위치로 순간이동")
+MainTab:CreateLabel("")
+MainTab:CreateLabel("⚠️ 주의: 벽 너머도 순간이동 가능")
+
+-- 초기화 완료 알림
+Rayfield:Notify({
+    Title = "에임 TP 핵",
+    Content = "로드 완료! Z 키로 순간이동",
+    Duration = 3
+})
