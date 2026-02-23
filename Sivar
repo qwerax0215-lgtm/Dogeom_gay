@@ -1,103 +1,16 @@
--- Rayfield 라이브러리 로드
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
--- Window 생성 (에임 TP 전용 핵)
-local Window = Rayfield:CreateWindow({
-    Name = "에임 TP 핵",
-    LoadingTitle = "에임 TP 핵",
-    LoadingSubtitle = "Z 키로 순간이동",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "AimTPHack",
-        FileName = "Config"
-    },
-    Discord = {
-        Enabled = false,
-        Invite = "",
-        RememberJoins = true
-    },
-    KeySystem = false
-})
-
--- 메인 탭 생성
-local MainTab = Window:CreateTab("메인", "home")
-
--- 에임 TP 관련 변수
-local aimTPEnabled = false
-
--- 텔레포트 함수
-local function teleportToMouse()
-    local player = game.Players.LocalPlayer
-    local character = player.Character
-    if not character then return false end
-    
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return false end
-    
-    local mouse = player:GetMouse()
-    if not mouse or not mouse.Hit then return false end
-    
-    -- 마우스 위치로 순간이동
-    rootPart.CFrame = CFrame.new(mouse.Hit.p)
-    return true
-end
-
--- Z 키 입력 처리
-game:GetService("UserInputService").InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.Z and aimTPEnabled then
-        if teleportToMouse() then
-            Rayfield:Notify({
-                Title = "에임 TP",
-                Content = "마우스 위치로 순간이동했습니다",
-                Duration = 1
-            })
-        else
-            Rayfield:Notify({
-                Title = "에임 TP",
-                Content = "순간이동 실패 (캐릭터 없음)",
-                Duration = 1.5
-            })
-        end
-    end
-end)
-
--- 메인 탭 UI
-MainTab:CreateSection("에임 TP 설정")
-
--- 에임 TP 토글
-local aimTPToggle = MainTab:CreateToggle({
-    Name = "에임 TP",
-    CurrentValue = false,
-    Flag = "AimTPToggle",
-    Callback = function(Value)
-        aimTPEnabled = Value
-        if Value then
-            Rayfield:Notify({
-                Title = "에임 TP",
-                Content = "활성화되었습니다. Z 키를 눌러 순간이동하세요",
-                Duration = 2
-            })
-        else
-            Rayfield:Notify({
-                Title = "에임 TP",
-                Content = "비활성화되었습니다",
-                Duration = 1.5
-            })
-        end
-    end
-})
-
--- 사용법 안내
-MainTab:CreateLabel("")
-MainTab:CreateLabel("📌 사용 방법")
-MainTab:CreateLabel("1. '에임 TP' 토글을 켜세요")
-MainTab:CreateLabel("2. Z 키를 누르면 마우스 위치로 순간이동")
-MainTab:CreateLabel("")
-MainTab:CreateLabel("⚠️ 주의: 벽 너머도 순간이동 가능")
-
--- 초기화 완료 알림
-Rayfield:Notify({
-    Title = "에임 TP 핵",
-    Content = "로드 완료! Z 키로 순간이동",
-    Duration = 3
-})
+local R=loadstring(game:HttpGet('https://sirius.menu/rayfield'))()local W=R:CreateWindow({Name="에임TP + 벽뚫",LoadingTitle="에임TP + 벽뚫",LoadingSubtitle="Z키 순간이동 + 벽통과",ConfigurationSaving={Enabled=true,FolderName="AimTPNoclip",FileName="Config"},Discord={Enabled=false,Invite="",RememberJoins=true},KeySystem=false})local M=W:CreateTab("메인","home")
+local aE=false;local function tM()local p=game.Players.LocalPlayer;local c=p.Character;if not c then return false end;local r=c:FindFirstChild"HumanoidRootPart"if not r then return false end;local m=p:GetMouse()if not m or not m.Hit then return false end;r.CFrame=CFrame.new(m.Hit.p)return true end
+game:GetService("UserInputService").InputBegan:Connect(function(i)if i.KeyCode==Enum.KeyCode.Z and aE then if tM()then R:Notify({Title="에임TP",Content="이동완료",Duration=1})end end end)
+local nE,nC,nP=false
+local function nS()local p=game.Players.LocalPlayer;local c=p.Character
+if nE then if nC then nC:Disconnect()end;if c then for _,v in pairs(c:GetDescendants())do if v:IsA"BasePart"then nP[v]=v.CanCollide end end end
+nC=game:GetService("RunService").Stepped:Connect(function()if nE then local p=game.Players.LocalPlayer;local c=p.Character;if c then for _,v in pairs(c:GetDescendants())do if v:IsA"BasePart"then v.CanCollide=false end end end end end)
+else if nC then nC:Disconnect()nC=nil end;local p=game.Players.LocalPlayer;local c=p.Character;if c then for _,v in pairs(c:GetDescendants())do if v:IsA"BasePart"then v.CanCollide=nP[v]~=nil and nP[v]or true end end end;nP={}end end
+M:CreateSection("에임TP")
+M:CreateToggle({Name="에임TP",CurrentValue=false,Flag="AimTP",Callback=function(v)aE=v;R:Notify({Title="에임TP",Content=v and"Z키 사용가능"or"비활성화",Duration=1.5})end})
+M:CreateLabel("Z 키를 누르면 마우스 위치로 이동")
+M:CreateSection("벽뚫")
+M:CreateToggle({Name="벽뚫",CurrentValue=false,Flag="Noclip",Callback=function(v)nE=v;nS();R:Notify({Title="벽뚫",Content=v and"벽 통과 가능"or"벽에 막힘",Duration=1.5})end})
+M:CreateLabel("토글 켜면 벽 통과")
+game.Players.LocalPlayer.CharacterAdded:Connect(function(c)wait(1)if nE then wait(0.2)nS()end end)
+R:Notify({Title="로드 완료",Content="에임TP + 벽뚫",Duration=3})
