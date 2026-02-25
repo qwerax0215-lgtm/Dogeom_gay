@@ -1,14 +1,14 @@
 -- Rayfield 라이브러리 로드
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Window 생성 (헬로꺼 핵)
+-- Window 생성 (yuri Hub) - 아홀로틀 테마
 local Window = Rayfield:CreateWindow({
-    Name = "헬로꺼 핵",
-    LoadingTitle = "헬로꺼 핵",
-    LoadingSubtitle = "Z키 순간이동 + 벽통과 + 플라이",
+    Name = "yuri Hub",
+    LoadingTitle = "yuri Hub",
+    LoadingSubtitle = "by Rayfield",
     ConfigurationSaving = {
         Enabled = true,
-        FolderName = "HelloHack",
+        FolderName = "yuriHub",
         FileName = "Config"
     },
     Discord = {
@@ -18,6 +18,40 @@ local Window = Rayfield:CreateWindow({
     },
     KeySystem = false
 })
+
+-- 아홀로틀 배경 설정 (귀여운 일러스트)
+local player = game.Players.LocalPlayer
+local gui = player:WaitForChild("PlayerGui")
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AxolotlBackground"
+screenGui.Parent = gui
+screenGui.IgnoreGuiInset = true
+
+local background = Instance.new("ImageLabel")
+background.Size = UDim2.new(1, 0, 1, 0)
+background.Position = UDim2.new(0, 0, 0, 0)
+background.BackgroundTransparency = 1
+background.Image = "rbxassetid://10477522617" -- 귀여운 아홀로틀 일러스트
+background.ImageColor3 = Color3.new(1, 0.9, 0.95) -- 연한 핑크색 틴트
+background.ScaleType = Enum.ScaleType.Crop
+background.Parent = screenGui
+
+-- UI 색상 설정
+Rayfield.Theme = {
+    TextColor = Color3.new(1, 1, 1),
+    BackgroundColor = Color3.new(1, 0.95, 0.98), -- 연한 핑크
+    ForegroundColor = Color3.new(1, 1, 1), -- 하얀색
+    RibbonColor = Color3.new(1, 0.9, 0.95),
+    TabBackgroundColor = Color3.new(1, 0.95, 0.98),
+    TabStrokeColor = Color3.new(1, 0.85, 0.9),
+    ToggleEnabledColor = Color3.new(1, 0.8, 0.85),
+    ToggleDisabledColor = Color3.new(0.9, 0.9, 0.9),
+    SliderBackgroundColor = Color3.new(1, 1, 1),
+    SliderProgressColor = Color3.new(1, 0.8, 0.85),
+    DropdownBackgroundColor = Color3.new(1, 1, 1),
+    InputBackgroundColor = Color3.new(1, 0.9, 0.95), -- 연한 핑크 입력창
+    NotifyBackgroundColor = Color3.new(1, 0.95, 0.98)
+}
 
 -- 메인 탭 생성
 local MainTab = Window:CreateTab("메인", "home")
@@ -100,12 +134,12 @@ local function toggleNoclip()
 end
 
 ---------------------------------------------------------------------------
--- 플라이 관련 (10 ~ 100000 속도, 타자치는 속도만큼 빨라짐)
+-- 플라이 관련
 ---------------------------------------------------------------------------
 local flyEnabled = false
 local flyBodyVelocity = nil
 local flyConnection = nil
-local flySpeed = 10  -- 기본 속도
+local flySpeed = 10
 
 local function toggleFly()
     local player = game.Players.LocalPlayer
@@ -118,7 +152,6 @@ local function toggleFly()
     if not humanoid or not rootPart then return end
     
     if flyEnabled then
-        -- 플라이 활성화
         humanoid.PlatformStand = true
         
         if flyBodyVelocity then
@@ -141,7 +174,6 @@ local function toggleFly()
             local camera = workspace.CurrentCamera
             local uis = game:GetService("UserInputService")
             
-            -- WASD 이동
             if uis:IsKeyDown(Enum.KeyCode.W) then
                 moveDirection = moveDirection + camera.CFrame.LookVector
             end
@@ -154,8 +186,6 @@ local function toggleFly()
             if uis:IsKeyDown(Enum.KeyCode.D) then
                 moveDirection = moveDirection + camera.CFrame.RightVector
             end
-            
-            -- 상하 이동 (스페이스/컨트롤)
             if uis:IsKeyDown(Enum.KeyCode.Space) then
                 moveDirection = moveDirection + Vector3.new(0, 1, 0)
             end
@@ -163,7 +193,6 @@ local function toggleFly()
                 moveDirection = moveDirection + Vector3.new(0, -1, 0)
             end
             
-            -- 속도 적용 (10 ~ 100000)
             if moveDirection.Magnitude > 0 then
                 moveDirection = moveDirection.Unit * flySpeed
             end
@@ -171,7 +200,6 @@ local function toggleFly()
             flyBodyVelocity.Velocity = moveDirection
         end)
     else
-        -- 플라이 비활성화
         if flyBodyVelocity then
             flyBodyVelocity:Destroy()
             flyBodyVelocity = nil
@@ -187,7 +215,94 @@ local function toggleFly()
 end
 
 ---------------------------------------------------------------------------
--- UI (에임TP, 벽뚫, 플라이)
+-- 속도 관련 (달리기/걷기)
+---------------------------------------------------------------------------
+local speedEnabled = false
+local speedValue = 16
+local originalWalkSpeed = 16
+local speedConnection = nil
+
+local function toggleSpeed()
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    if speedEnabled then
+        humanoid.WalkSpeed = speedValue
+        
+        if speedConnection then
+            speedConnection:Disconnect()
+        end
+        
+        speedConnection = game:GetService("RunService").RenderStepped:Connect(function()
+            if speedEnabled and humanoid and humanoid.Parent then
+                if humanoid.WalkSpeed ~= speedValue then
+                    humanoid.WalkSpeed = speedValue
+                end
+            end
+        end)
+    else
+        if speedConnection then
+            speedConnection:Disconnect()
+            speedConnection = nil
+        end
+        
+        if humanoid and humanoid.Parent then
+            humanoid.WalkSpeed = originalWalkSpeed
+        end
+    end
+end
+
+---------------------------------------------------------------------------
+-- 점프 관련
+---------------------------------------------------------------------------
+local jumpEnabled = false
+local jumpValue = 50
+local originalJumpPower = 50
+local jumpConnection = nil
+
+local function toggleJump()
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    if jumpEnabled then
+        humanoid.JumpPower = jumpValue
+        humanoid.JumpHeight = jumpValue / 10
+        
+        if jumpConnection then
+            jumpConnection:Disconnect()
+        end
+        
+        jumpConnection = game:GetService("RunService").RenderStepped:Connect(function()
+            if jumpEnabled and humanoid and humanoid.Parent then
+                if humanoid.JumpPower ~= jumpValue then
+                    humanoid.JumpPower = jumpValue
+                    humanoid.JumpHeight = jumpValue / 10
+                end
+            end
+        end)
+    else
+        if jumpConnection then
+            jumpConnection:Disconnect()
+            jumpConnection = nil
+        end
+        
+        if humanoid and humanoid.Parent then
+            humanoid.JumpPower = originalJumpPower
+            humanoid.JumpHeight = originalJumpPower / 10
+        end
+    end
+end
+
+---------------------------------------------------------------------------
+-- UI (에임TP, 벽뚫, 플라이, 속도, 점프)
 ---------------------------------------------------------------------------
 MainTab:CreateSection("에임TP")
 
@@ -227,11 +342,11 @@ local flyToggle = MainTab:CreateToggle({
     Callback = function(v)
         flyEnabled = v
         toggleFly()
-        Rayfield:Notify({Title="플라이",Content=v and "비행 가능 (WASD+스페이스/컨트롤)" or "비행 중지",Duration=1.5})
+        Rayfield:Notify({Title="플라이",Content=v and "비행 가능" or "비행 중지",Duration=1.5})
     end
 })
 
--- 속도 입력 필드 (10 ~ 100000)
+-- 플라이 속도 입력 (10~100000)
 local flySpeedInput = MainTab:CreateInput({
     Name = "플라이 속도",
     PlaceholderText = "10 ~ 100000",
@@ -248,7 +363,88 @@ local flySpeedInput = MainTab:CreateInput({
     end
 })
 
-MainTab:CreateLabel("WASD: 이동 | 스페이스: 상승 | 컨트롤: 하강")
+MainTab:CreateLabel("WASD 이동 | 스페이스 상승 | 컨트롤 하강")
+
+MainTab:CreateSection("속도")
+
+local speedToggle = MainTab:CreateToggle({
+    Name = "속도 조절",
+    CurrentValue = false,
+    Flag = "Speed",
+    Callback = function(v)
+        speedEnabled = v
+        toggleSpeed()
+        Rayfield:Notify({Title="속도",Content=v and "활성화" or "비활성화",Duration=1.5})
+    end
+})
+
+-- 속도 입력 (10~100000)
+local speedInput = MainTab:CreateInput({
+    Name = "속도 값",
+    PlaceholderText = "10 ~ 100000",
+    RemoveTextAfterFocusLost = false,
+    Flag = "SpeedInput",
+    Callback = function(Text)
+        local val = tonumber(Text)
+        if val and val >= 10 and val <= 100000 then
+            speedValue = val
+            if speedEnabled then
+                local player = game.Players.LocalPlayer
+                local character = player.Character
+                if character then
+                    local humanoid = character:FindFirstChildOfClass("Humanoid")
+                    if humanoid then
+                        humanoid.WalkSpeed = val
+                    end
+                end
+            end
+            Rayfield:Notify({Title="속도 설정",Content="설정됨: "..val,Duration=1})
+        else
+            Rayfield:Notify({Title="오류",Content="10~100000 사이의 숫자를 입력하세요",Duration=2})
+        end
+    end
+})
+
+MainTab:CreateSection("점프력")
+
+local jumpToggle = MainTab:CreateToggle({
+    Name = "점프력 조절",
+    CurrentValue = false,
+    Flag = "Jump",
+    Callback = function(v)
+        jumpEnabled = v
+        toggleJump()
+        Rayfield:Notify({Title="점프력",Content=v and "활성화" or "비활성화",Duration=1.5})
+    end
+})
+
+-- 점프력 입력 (10~100000)
+local jumpInput = MainTab:CreateInput({
+    Name = "점프력 값",
+    PlaceholderText = "10 ~ 100000",
+    RemoveTextAfterFocusLost = false,
+    Flag = "JumpInput",
+    Callback = function(Text)
+        local val = tonumber(Text)
+        if val and val >= 10 and val <= 100000 then
+            jumpValue = val
+            if jumpEnabled then
+                local player = game.Players.LocalPlayer
+                local character = player.Character
+                if character then
+                    local humanoid = character:FindFirstChildOfClass("Humanoid")
+                    if humanoid then
+                        humanoid.JumpPower = val
+                        humanoid.JumpHeight = val / 10
+                    end
+                end
+            end
+            Rayfield:Notify({Title="점프력 설정",Content="설정됨: "..val,Duration=1})
+        else
+            Rayfield:Notify({Title="오류",Content="10~100000 사이의 숫자를 입력하세요",Duration=2})
+        end
+    end
+})
 
 ---------------------------------------------------------------------------
 -- 캐릭터 변경 처리
@@ -263,9 +459,17 @@ game.Players.LocalPlayer.CharacterAdded:Connect(function(c)
         wait(0.2)
         toggleFly()
     end
+    if speedEnabled then
+        wait(0.2)
+        toggleSpeed()
+    end
+    if jumpEnabled then
+        wait(0.2)
+        toggleJump()
+    end
 end)
 
 ---------------------------------------------------------------------------
 -- 시작 알림
 ---------------------------------------------------------------------------
-Rayfield:Notify({Title="로드 완료",Content="헬로꺼 핵 (헬로 바보)",Duration=3})
+Rayfield:Notify({Title="로드 완료",Content="yuri Hub",Duration=3})
